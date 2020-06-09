@@ -183,6 +183,18 @@ STK_UNIT EQU 4
     mov %4, %1
 %endmacro
 
+%macro dbg_printf_line 1-*
+    ; if (DebugMode) printf(args);
+    cmp dword [DebugMode], FALSE
+    je %%else
+    ; print info
+    fprintf_line [stderr], %{1:-1}
+    %%else:
+%endmacro
+
+section .data
+    DebugMode: dd FALSE
+
 section .text
 align 16
 global main
