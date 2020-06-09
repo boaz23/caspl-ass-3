@@ -6,9 +6,9 @@ LINK        := ld
 LINK_FLAGS  := -g -m elf_i386
 
 SRC_DIR         := .
-OBJ_DIR         := .
-LIST_DIR        := .
-BIN_DIR         := .
+OBJ_DIR         := bin
+LIST_DIR        := bin
+BIN_DIR         := bin
 
 TEST_DIR        := test
 
@@ -23,7 +23,7 @@ test_c:
 	$(CC) $(CC_FLAGS) $(TEST_DIR)/test.o $(TEST_DIR)/calc.o -o $(TEST_DIR)/test
 
 $(PRG_NAME): $(OBJECTS)
-	$(CC) -o $(PRG_NAME) $(CC_FLAGS) $(OBJECTS)
+	$(CC) -o $(BIN_DIR)/$(PRG_NAME) $(CC_FLAGS) $(OBJECTS)
 
 # .c/.s compile rulesint
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
