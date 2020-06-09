@@ -197,17 +197,25 @@ BOARD_HEIGHT EQU 100
 
 section .data
     global DebugMode
+    global N
+    global R
+    global K
+    global d
+    global seed
 
+    global LSFR
     global TargetPosition
     global IsTargetAlive
+
     DebugMode: dd FALSE
     N: dd 0
     R: dd 0
     K: dd 0
-    d: dd 0
-    seed: dd 0
+    d: dq 0
+    seed: dw 0
 
-    TargetPosition: dd 0
+    LSFR: dw 0
+    TargetPosition: dq 0
     IsTargetAlive: dd FALSE
 
 section .text
