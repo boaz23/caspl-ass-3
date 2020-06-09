@@ -1,9 +1,9 @@
-CC              := gcc
-CC_FLAGS	:= -Wall -m32
-ASM             := nasm
-ASM_FLAGS	:= -f elf -w+all
-LINK		:= ld
-LINK_FLAGS	:= -g -m elf_i386
+CC          := gcc
+CC_FLAGS    := -Wall -m32
+ASM         := nasm
+ASM_FLAGS   := -f elf -w+all
+LINK        := ld
+LINK_FLAGS  := -g -m elf_i386
 
 SRC_DIR         := .
 OBJ_DIR         := .
