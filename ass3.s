@@ -192,8 +192,23 @@ STK_UNIT EQU 4
     %%else:
 %endmacro
 
+BOARD_WIDTH  EQU 100
+BOARD_HEIGHT EQU 100
+
 section .data
+    global DebugMode
+
+    global TargetPosition
+    global IsTargetAlive
     DebugMode: dd FALSE
+    N: dd 0
+    R: dd 0
+    K: dd 0
+    d: dd 0
+    seed: dd 0
+
+    TargetPosition: dd 0
+    IsTargetAlive: dd FALSE
 
 section .text
 align 16
