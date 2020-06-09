@@ -1,0 +1,20 @@
+#extensionless files
+*
+!/**/
+!*.*
+!makefile*
+
+# githistory
+.history/
+
+# compilation and debug related files
+*.o
+*.lst
+*.bin
+
+# compressed files
+*.zip
+*.tar.gz
+
+#specific files
+out.txt
