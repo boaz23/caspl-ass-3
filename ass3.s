@@ -192,8 +192,33 @@ STK_UNIT EQU 4
     %%else:
 %endmacro
 
-BOARD_WIDTH  EQU 100
-BOARD_HEIGHT EQU 100
+%macro print_double 1
+    void_call printf, FloatPrintFormat, [%1], [%1+4]
+%endmacro
+%macro dbg_print_double_st 0
+    cmp dword [DebugMode], FALSE
+    je %%else
+
+    sub esp, 8
+    fst qword [esp]
+    push FloatPrintFormat_NewLine
+    call printf
+    add esp, 12
+
+    %%else:
+%endmacro
+
+BOARD_SIZE  EQU 100
+
+UI16_MAX_VALUE EQU 0FFFFh
+
+section .rodata
+    ; constants
+    BoardSize: dd BOARD_SIZE
+    UI16MaxValue: dd UI16_MAX_VALUE
+    FloatPrintFormat: db "%f", NULL_TERMINATOR
+    FloatPrintFormat_NewLine: db "%f", NEW_LINE_TERMINATOR, NULL_TERMINATOR
+
 
 section .data
     global DebugMode
@@ -207,6 +232,7 @@ section .data
     global TargetPosition
     global IsTargetAlive
 
+    ; command line arguments
     DebugMode: dd FALSE
     N: dd 0
     R: dd 0
@@ -214,7 +240,12 @@ section .data
     d: dq 0
     seed: dw 0
 
-    LSFR: dw 0
+    ; program state globals
+    ; NOTE: float point better be in double precision (64-bit, double)
+    ;       because printf cannot deal with single precision (32-bit, float)
+    LSFR: dd 0 ; NOTE: we should use only 2 bytes, but it's easier to deal
+               ;       with 4 bytes in most instructions and calculations
+    RandomNumber: dq 0
     TargetPosition: dq 0
     IsTargetAlive: dd FALSE
 
@@ -225,6 +256,10 @@ global main
 extern printf
 extern fprintf
 extern sscanf
+
+extern stdin
+extern stdout
+extern stderr
 
 extern malloc
 extern calloc
@@ -249,7 +284,8 @@ shift_lsfr:
     
     func_exit
 
-never_lucky:
+; generates a new 'random' number of size 2 bytes
+rng:
     func_entry
 
     mov ecx, 16
@@ -259,4 +295,82 @@ never_lucky:
 
     func_exit
 
+; calculates the absolute value of x
+abs_int: ; abs(int x)
+    %push
+    %define $x ebp+8
+    %define $abs_val ebp-4
+    func_entry 4
+
+    ; if (x = 0) goto non_negative
+    mem_mov [$abs_val], [$x], eax
+    cmp dword [$abs_val], 0
+    jge .non_negative
+
+    .negative:
+    ; x = -x
+    neg dword [$abs_val]
+
+    .non_negative:
+
+    .exit:
+    func_exit [$abs_val]
+    %pop
+
+
+; calculates the distance between 2 points in 1 dimentional space
+; return | x1 - x2 |
+distance_1d_int: ; distance_1d(int x1, int x2)
+    %push
+    %define $x1 ebp+8
+    %define $x2 ebp+12
+    %define $distance ebp-4
+    func_entry 4
+
+    ; eax = x1 - x2
+    mov eax, dword [$x1]
+    mov ebx, dword [$x2]
+    sub eax, ebx
+    func_call [$distance], abs_int, eax
+
+    func_exit [$distance]
+    %pop
+
+; generates a new 'random' 'real' (floating point) number in the range [start, end]
+never_lucky: ; never_lucky(int start, int end)
+    %push
+    %define $start ebp+8
+    %define $end ebp+12
+    %define $range_len ebp-4
+    func_entry 4
+
+    ; range_len = | start - end |
+    func_call [$range_len], distance_1d_int, [$start], [$end]
+    void_call rng
+    
+    finit ; init x87 registers
+
+    fild dword [LSFR]
+    fild dword [UI16MaxValue]
+    fdivp ; st0 = LSFR / UI16MaxValue
+
+    fild dword [$range_len]
+    fmulp ; st0 = st0 * range_len
+
+    fild dword [$start]
+    faddp ; st0 += start
+
+    ; RandomNumber = st0
+    fstp qword [RandomNumber]
+
+    func_exit
+    %pop
+
 main:
+    func_entry
+
+    mov dword [LSFR], 00000F5A5h
+    mov dword [DebugMode], TRUE
+    void_call never_lucky, -10, 10
+
+    func_exit

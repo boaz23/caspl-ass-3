@@ -1,5 +1,5 @@
 CC          := gcc
-CC_FLAGS    := -Wall -m32
+CC_FLAGS    := -Wall -m32 -g
 ASM         := nasm
 ASM_FLAGS   := -f elf -w+all
 LINK        := ld
