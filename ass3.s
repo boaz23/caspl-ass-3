@@ -230,4 +230,33 @@ extern malloc
 extern calloc
 extern free
 
+global never_lucky
+
+shift_lsfr:
+    func_entry
+
+    mov eax, 0
+    bt word [LSFR], 16 - 16
+    adc al, 0
+    bt word [LSFR], 16 - 14
+    adc al, 0
+    bt word [LSFR], 16 - 13
+    adc al, 0
+    bt word [LSFR], 16 - 11
+    adc al, 0
+    bt ax, 0
+    rcr word [LSFR], 1
+    
+    func_exit
+
+never_lucky:
+    func_entry
+
+    mov ecx, 16
+    .shift_lsfr:
+    void_call shift_lsfr
+    loop .shift_lsfr, ecx
+
+    func_exit
+
 main:
