@@ -186,18 +186,24 @@ STK_UNIT EQU 4
 %macro dbg_printf_line 1-*
     ; if (DebugMode) printf(args);
     cmp dword [DebugMode], FALSE
-    je %%else
+    je %%not_debug_mode
     ; print info
     fprintf_line [stderr], %{1:-1}
-    %%else:
+    %%not_debug_mode:
 %endmacro
 
 %macro print_double 1
     void_call printf, FloatPrintFormat, [%1], [%1+4]
 %endmacro
+%macro dbg_print_double 2
+    cmp dword [DebugMode], FALSE
+    je %%not_debug_mode
+    fprintf_line [stderr], {%1, "%.2f"}, [%2], [%2+4]
+    %%not_debug_mode:
+%endmacro
 %macro dbg_print_double_st 0
     cmp dword [DebugMode], FALSE
-    je %%else
+    je %%not_debug_mode
 
     sub esp, 8
     fst qword [esp]
@@ -205,7 +211,7 @@ STK_UNIT EQU 4
     call printf
     add esp, 12
 
-    %%else:
+    %%not_debug_mode:
 %endmacro
 
 BOARD_SIZE  EQU 100
@@ -216,8 +222,8 @@ section .rodata
     ; constants
     BoardSize: dd BOARD_SIZE
     UI16MaxValue: dd UI16_MAX_VALUE
-    FloatPrintFormat: db "%f", NULL_TERMINATOR
-    FloatPrintFormat_NewLine: db "%f", NEW_LINE_TERMINATOR, NULL_TERMINATOR
+    FloatPrintFormat: db "%.2f", NULL_TERMINATOR
+    FloatPrintFormat_NewLine: db "%.2f", NEW_LINE_TERMINATOR, NULL_TERMINATOR
 
 
 section .data
@@ -295,6 +301,37 @@ rng:
 
     func_exit
 
+; generates a new 'random' 'real' (floating point) number in the range [start, end]
+never_lucky: ; never_lucky(int start, int end)
+    %push
+    %define $start ebp+8
+    %define $end ebp+12
+    %define $range_len ebp-4
+    func_entry 4
+
+    ; range_len = | start - end |
+    func_call [$range_len], distance_1d_int, [$start], [$end]
+    void_call rng
+    
+    finit ; init x87 registers
+
+    fild dword [LSFR]
+    fild dword [UI16MaxValue]
+    fdivp ; st0 = LSFR / UI16MaxValue
+
+    fild dword [$range_len]
+    fmulp ; st0 = st0 * range_len
+
+    fild dword [$start]
+    faddp ; st0 += start
+
+    ; RandomNumber = st0
+    fstp qword [RandomNumber]
+    dbg_print_double "Generated Random Number: ", RandomNumber
+
+    func_exit
+    %pop
+
 ; calculates the absolute value of x
 abs_int: ; abs(int x)
     %push
@@ -336,41 +373,10 @@ distance_1d_int: ; distance_1d(int x1, int x2)
     func_exit [$distance]
     %pop
 
-; generates a new 'random' 'real' (floating point) number in the range [start, end]
-never_lucky: ; never_lucky(int start, int end)
-    %push
-    %define $start ebp+8
-    %define $end ebp+12
-    %define $range_len ebp-4
-    func_entry 4
-
-    ; range_len = | start - end |
-    func_call [$range_len], distance_1d_int, [$start], [$end]
-    void_call rng
-    
-    finit ; init x87 registers
-
-    fild dword [LSFR]
-    fild dword [UI16MaxValue]
-    fdivp ; st0 = LSFR / UI16MaxValue
-
-    fild dword [$range_len]
-    fmulp ; st0 = st0 * range_len
-
-    fild dword [$start]
-    faddp ; st0 += start
-
-    ; RandomNumber = st0
-    fstp qword [RandomNumber]
-
-    func_exit
-    %pop
-
 main:
     func_entry
 
     mov dword [LSFR], 00000F5A5h
     mov dword [DebugMode], TRUE
-    void_call never_lucky, -10, 10
 
     func_exit
