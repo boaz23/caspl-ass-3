@@ -269,6 +269,8 @@ section .data
 
     ; co-routines: global state and temporary variables
     global CORS
+    global CURR
+    global CURR_ID
     
     CORS:    dd NULL
     CURR:    dd NULL
@@ -276,6 +278,8 @@ section .data
     SPT:     dd NULL
     BPT:     dd NULL
     SPMAIN:  dd NULL ; main's stack pointer
+
+    COR_SIZE equ 16
 
     CODEP  equ 0
     FLAGSP equ 4
@@ -321,6 +325,8 @@ extern malloc
 extern calloc
 extern free
 
+global resume
+global end_co
 global never_lucky
 extern scheduler_co_func
 extern printer_co_func
@@ -330,11 +336,12 @@ extern target_co_func
 ;-------------- CO-ROUTINES --------------
 ;-----------------------------------------
 
-co_init: ; co_init(int co_routine_id)
+init_co: ; init_co(int co_routine_id)
     func_entry
     mov EBX, [EBP+8]
     mov ECX, EBX
-    mov EBX, [EBX*4+CORS]
+    mov EBX, [CORS]
+    mov EBX, [EBX+ECX*4]
     bts dword [EBX+FLAGSP], 0  ; test if already initialized
     jc  .init_done
 
@@ -372,7 +379,8 @@ resume: ; resume(int ebx = resume_co_routine_id)
 do_resume:
     .restore_state_of_resumed_routine:
     mov ECX, EBX
-    mov EBX, [EBX*4+CORS]
+    mov EBX, [CORS]
+    mov EBX, [EBX+ECX*4]
 
     mov ESP, [EBX+SPP]  ; Load SP for resumed co-routine
     mov EBP, [EBX+BPP]   ; Also use as EBP
@@ -515,5 +523,19 @@ main:
 
     mov dword [LSFR], 00000F5A5h
     mov dword [DebugMode], TRUE
+
+    func_call [CORS], malloc, COR_SIZE*3
+    mov eax, dword [CORS]
+    mov dword [eax+0], CO_PRINTER
+    mov dword [eax+4], CO_TARGET
+    mov dword [eax+8], CO_SCHEDULER
+
+    void_call init_co, 0
+    void_call init_co, 1
+    void_call init_co, 2
+    
+    void_call start_co, 2
+
+    void_call free, [CORS]
 
     func_exit
