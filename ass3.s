@@ -87,9 +87,9 @@ STK_UNIT EQU 4
 ;   the above is semantically equivalent to:
 ;       printf("%d", [r])
 %macro printf_inline 1-*
-    section	.rodata
+    section .rodata
         %%format: db %1, NULL_TERMINATOR
-    section	.text
+    section .text
         %if %0-1
             void_call printf, %%format, %{2:-1}
         %else
@@ -112,9 +112,9 @@ STK_UNIT EQU 4
 %endmacro
 
 %macro fprintf_inline 2-*
-    section	.rodata
+    section .rodata
         %%format: db %2, NULL_TERMINATOR
-    section	.text
+    section .text
         %if %0-2
             void_call fprintf, %1, %%format, %{3:-1}
         %else
@@ -227,12 +227,19 @@ section .rodata
     FloatPrintFormat: db "%.2f", NULL_TERMINATOR
     FloatPrintFormat_NewLine: db "%.2f", NEW_LINE_TERMINATOR, NULL_TERMINATOR
 
-setion .bss
+section .bss
     align 16
+    STKSZ equ 16*1024
+
+    ; co-routines: stack allocation
+    STK_SCHEDULER: resb STKSZ
+    STK_PRINTER:   resb STKSZ
+    STK_TARGET:    resb STKSZ
 
 section .data
     align 16
 
+    ; command line arguments
     global DebugMode
     global N
     global R
@@ -240,11 +247,6 @@ section .data
     global d
     global seed
 
-    global LSFR
-    global TargetPosition
-    global IsTargetAlive
-
-    ; command line arguments
     DebugMode: dd FALSE
     N: dd 0
     R: dd 0
@@ -253,6 +255,10 @@ section .data
     seed: dw 0
 
     ; program state globals
+    global LSFR
+    global TargetPosition
+    global IsTargetAlive
+
     ; NOTE: float point better be in double precision (64-bit, double)
     ;       because printf cannot deal with single precision (32-bit, float)
     LSFR: dd 0 ; NOTE: we should use only 2 bytes, but it's easier to deal
@@ -260,6 +266,44 @@ section .data
     RandomNumber: dq 0
     TargetPosition: dq 0
     IsTargetAlive: dd FALSE
+
+    ; co-routines: global state and temporary variables
+    global CORS
+    
+    CORS:    dd NULL
+    CURR:    dd NULL
+    CURR_ID: dd -1
+    SPT:     dd NULL
+    BPT:     dd NULL
+    SPMAIN:  dd NULL ; main's stack pointer
+
+    CODEP  equ 0
+    FLAGSP equ 4
+    SPP    equ 8
+    BPP    equ 12
+    ;struct COR {
+    ;    void (*func)(); // func pointer
+    ;    int flags;
+    ;    void *spp; // stack pointer
+    ;    void *bpp; // base pointer
+    ;}
+
+    ; co-routines: static co-routines initialization
+    CO_ARGS_COUNT equ 1
+    %define co_routine_bp_offset(sp) sp+STKSZ-((CO_ARGS_COUNT + 2) * STK_UNIT)
+    %define define_co_routine(func, sp) dd func, 0, co_routine_bp_offset(sp), co_routine_bp_offset(sp)
+    
+    CO_SCHEDULER: define_co_routine(scheduler_co_func, STK_SCHEDULER)
+    CO_PRINTER:   define_co_routine(printer_co_func,   STK_PRINTER)
+    CO_TARGET:    define_co_routine(target_co_func,    STK_TARGET)
+
+    global CO_ID_SCHEDULER
+    global CO_ID_PRINTER
+    global CO_ID_TARGET
+
+    CO_ID_SCHEDULER: dd -1
+    CO_ID_PRINTER:   dd -1
+    CO_ID_TARGET:    dd -1
 
 section .text
 align 16
@@ -278,7 +322,91 @@ extern calloc
 extern free
 
 global never_lucky
+extern scheduler_co_func
+extern printer_co_func
+extern target_co_func
 
+;-----------------------------------------
+;-------------- CO-ROUTINES --------------
+;-----------------------------------------
+
+co_init: ; co_init(int co_routine_id)
+    func_entry
+    mov EBX, [EBP+8]
+    mov ECX, EBX
+    mov EBX, [EBX*4+CORS]
+    bts dword [EBX+FLAGSP], 0  ; test if already initialized
+    jc  .init_done
+
+    .init:
+    mov EAX, [EBX+CODEP] ; Get initial PC
+    ; save stack and base pointers
+    mov [SPT], ESP
+    mov [BPT], EBP
+
+    mov ESP, [EBX+SPP]   ; Get initial SP
+    mov EBP, [EBX+BPP]   ; Also use as EBP
+    mov [EBP+8], ECX
+    push EAX ; Push initial "return" address
+    pushf    ; and flags
+    pusha    ; and all other regs
+    mov [EBX+SPP], ESP ; Save new SP in structure
+
+    ; restore stack and base pointers
+    mov EBP, [BPT]
+    mov ESP, [SPT]
+
+    .init_done:
+    func_exit
+
+; EBX is pointer to co-init structure of co-routine to be resumed
+; CURR holds a pointer to co-init structure of the curent co-routine
+resume: ; resume(int ebx = resume_co_routine_id)
+    .save_state_of_calling_routine:
+    pushf
+    pusha
+    mov EDX, [CURR]
+    ; save stack and base pointer in co-routine structure
+    mov [EDX+SPP], ESP
+    mov [EDX+BPP], EBP
+do_resume:
+    .restore_state_of_resumed_routine:
+    mov ECX, EBX
+    mov EBX, [EBX*4+CORS]
+
+    mov ESP, [EBX+SPP]  ; Load SP for resumed co-routine
+    mov EBP, [EBX+BPP]   ; Also use as EBP
+    mov [CURR], EBX
+    mov [CURR_ID], ECX
+    popa ; Restore resumed co-routine state
+    popf
+    ret                     ; "return" to resumed co-routine!
+
+; C-callable start of the first co-routine
+start_co: ; start_co(int co_routine_id)
+    push ebp
+    mov ebp, esp
+    pushfd
+    pushad
+
+    ; Save stack and base pointers of main code
+    mov [SPMAIN], ESP
+
+    mov EBX, [EBP+8] ; Get number of co-routine
+    jmp do_resume
+
+; End co-routine mechanism, back to C main
+end_co:
+    ; Restore state of main code (including EBP)
+    mov ESP, [SPMAIN]
+    popad
+    popfd
+    pop EBP
+    ret
+
+;---------------------------------
+;-------------- RNG --------------
+;---------------------------------
 shift_lsfr:
     func_entry
 
@@ -379,6 +507,9 @@ distance_1d_int: ; distance_1d(int x1, int x2)
     func_exit [$distance]
     %pop
 
+;---------------------------------
+;-------------- Main -------------
+;---------------------------------
 main:
     func_entry
 
