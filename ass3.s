@@ -219,14 +219,20 @@ BOARD_SIZE  EQU 100
 UI16_MAX_VALUE EQU 0FFFFh
 
 section .rodata
+    align 16
+
     ; constants
     BoardSize: dd BOARD_SIZE
     UI16MaxValue: dd UI16_MAX_VALUE
     FloatPrintFormat: db "%.2f", NULL_TERMINATOR
     FloatPrintFormat_NewLine: db "%.2f", NEW_LINE_TERMINATOR, NULL_TERMINATOR
 
+setion .bss
+    align 16
 
 section .data
+    align 16
+
     global DebugMode
     global N
     global R
