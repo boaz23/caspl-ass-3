@@ -220,9 +220,32 @@ STK_UNIT EQU 4
     %%not_debug_mode:
 %endmacro
 
-BOARD_SIZE  EQU 100
+%macro co_resume 1
+    push ebx
+    mov ebx, %1
+    call resume
+    pop ebx
+%endmacro
 
 UI16_MAX_VALUE EQU 0FFFFh
+
+BOARD_SIZE EQU 100
+
+;struct drone {
+;    double x;
+;    double y;
+;    double speed;
+;    double angle;
+;    int score;
+;    bool is_active;
+;}
+%define drone_x(d) d+0
+%define drone_y(d) d+8
+%define drone_speed(d) d+16
+%define drone_angle(d) d+24
+%define drone_score(d) d+32
+%define drone_is_active(d) d+36
+sizeof_drone EQU 40
 
 section .rodata
     align 16
@@ -263,15 +286,16 @@ section .data
     ; program state globals
     global LSFR
     global TargetPosition
-    global IsTargetAlive
 
     ; NOTE: float point better be in double precision (64-bit, double)
     ;       because printf cannot deal with single precision (32-bit, float)
     LSFR: dd 0 ; NOTE: we should use only 2 bytes, but it's easier to deal
                ;       with 4 bytes in most instructions and calculations
     RandomNumber: dq 0
-    TargetPosition: dq 0
-    IsTargetAlive: dd FALSE
+    ; NOTE: the position of the target sits in this file because
+    ; the assignment page says to use globals and that all globals should
+    ; sit in this file
+    TargetPosition: dq 0, 0 ; (double x, double y)
 
     ; co-routines: global state and temporary variables
     global CORS
@@ -314,6 +338,9 @@ section .data
     CO_ID_SCHEDULER: dd -1
     CO_ID_PRINTER:   dd -1
     CO_ID_TARGET:    dd -1
+
+    %undef define_co_routine
+    %undef co_routine_bp_offset
 
 section .text
 align 16
@@ -455,8 +482,6 @@ never_lucky: ; never_lucky(int start, int end)
     ; range_len = | start - end |
     func_call [%$range_len], distance_1d_int, [%$start], [%$end]
     void_call rng
-    
-    finit ; init x87 registers
 
     fild dword [LSFR]
     fild dword [UI16MaxValue]
