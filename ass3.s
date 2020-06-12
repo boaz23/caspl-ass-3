@@ -17,10 +17,13 @@ STK_UNIT EQU 4
 
 ; esp -= n
 %macro func_entry 0-1 0
+    %push func_entry
+    %define %$_stack_reserve_size align_on_16(%1)
+
     push ebp
     mov ebp, esp
-    %if align_on_16(%1)
-    sub esp, align_on_16(%1)
+    %if %$_stack_reserve_size
+    sub esp, %$_stack_reserve_size
     %endif
     pushfd
     pushad
@@ -36,9 +39,12 @@ STK_UNIT EQU 4
     %else
     mov eax, %1
     %endif
+    %if %$_stack_reserve_size
     mov esp, ebp
+    %endif
     pop ebp
     ret
+    %pop
 %endmacro
 
 ; SIGNATURE: func_call(p_ret_val, func, ... args)
@@ -52,12 +58,12 @@ STK_UNIT EQU 4
 ;       [r] = fgets(ebx, MAX_LINE_LENGTH, [stdin])
 %macro func_call 2-*
     %push
-    %define $args_size (%0-2)*STK_UNIT
-    %define $args_size_aligned align_on_16($args_size)
-    %define $align_push_size ($args_size_aligned - $args_size)
+    %define %$args_size (%0-2)*STK_UNIT
+    %define %$args_size_aligned align_on_16(%$args_size)
+    %define %$push_size_aligned_complement (%$args_size_aligned - %$args_size)
     
-    %if $align_push_size
-    sub esp, $align_push_size
+    %if %$push_size_aligned_complement
+    sub esp, %$push_size_aligned_complement
     %endif
     %rep %0-2
         %rotate -1
@@ -70,8 +76,8 @@ STK_UNIT EQU 4
     %else
     mov %1, eax
     %endif
-    %if $args_size_aligned
-    add esp, $args_size_aligned
+    %if %$args_size_aligned
+    add esp, %$args_size_aligned
     %endif
     %pop
 %endmacro
@@ -370,8 +376,8 @@ init_co: ; init_co(int co_routine_id)
 ; CURR holds a pointer to co-init structure of the curent co-routine
 resume: ; resume(int ebx = resume_co_routine_id)
     .save_state_of_calling_routine:
-    pushf
-    pusha
+    pushfd
+    pushad
     mov EDX, [CURR]
     ; save stack and base pointer in co-routine structure
     mov [EDX+SPP], ESP
@@ -386,16 +392,15 @@ do_resume:
     mov EBP, [EBX+BPP]   ; Also use as EBP
     mov [CURR], EBX
     mov [CURR_ID], ECX
-    popa ; Restore resumed co-routine state
-    popf
+    popad ; Restore resumed co-routine state
+    popfd
+
+    .resume:
     ret                     ; "return" to resumed co-routine!
 
 ; C-callable start of the first co-routine
 start_co: ; start_co(int co_routine_id)
-    push ebp
-    mov ebp, esp
-    pushfd
-    pushad
+    func_entry
 
     ; Save stack and base pointers of main code
     mov [SPMAIN], ESP
@@ -407,10 +412,7 @@ start_co: ; start_co(int co_routine_id)
 end_co:
     ; Restore state of main code (including EBP)
     mov ESP, [SPMAIN]
-    popad
-    popfd
-    pop EBP
-    ret
+    func_exit
 
 ;---------------------------------
 ;-------------- RNG --------------
@@ -445,14 +447,13 @@ rng:
 
 ; generates a new 'random' 'real' (floating point) number in the range [start, end]
 never_lucky: ; never_lucky(int start, int end)
-    %push
-    %define $start ebp+8
-    %define $end ebp+12
-    %define $range_len ebp-4
     func_entry 4
+    %define %$start ebp+8
+    %define %$end ebp+12
+    %define %$range_len ebp-4
 
     ; range_len = | start - end |
-    func_call [$range_len], distance_1d_int, [$start], [$end]
+    func_call [%$range_len], distance_1d_int, [%$start], [%$end]
     void_call rng
     
     finit ; init x87 registers
@@ -461,10 +462,10 @@ never_lucky: ; never_lucky(int start, int end)
     fild dword [UI16MaxValue]
     fdivp ; st0 = LSFR / UI16MaxValue
 
-    fild dword [$range_len]
+    fild dword [%$range_len]
     fmulp ; st0 = st0 * range_len
 
-    fild dword [$start]
+    fild dword [%$start]
     faddp ; st0 += start
 
     ; RandomNumber = st0
@@ -472,48 +473,43 @@ never_lucky: ; never_lucky(int start, int end)
     dbg_print_double "Generated Random Number: ", RandomNumber
 
     func_exit
-    %pop
 
 ; calculates the absolute value of x
 abs_int: ; abs(int x)
-    %push
-    %define $x ebp+8
-    %define $abs_val ebp-4
     func_entry 4
+    %define %$x ebp+8
+    %define %$abs_val ebp-4
 
     ; if (x = 0) goto non_negative
-    mem_mov [$abs_val], [$x], eax
-    cmp dword [$abs_val], 0
+    mem_mov [%$abs_val], [%$x], eax
+    cmp dword [%$abs_val], 0
     jge .non_negative
 
     .negative:
     ; x = -x
-    neg dword [$abs_val]
+    neg dword [%$abs_val]
 
     .non_negative:
 
     .exit:
-    func_exit [$abs_val]
-    %pop
+    func_exit [%$abs_val]
 
 
 ; calculates the distance between 2 points in 1 dimentional space
 ; return | x1 - x2 |
 distance_1d_int: ; distance_1d(int x1, int x2)
-    %push
-    %define $x1 ebp+8
-    %define $x2 ebp+12
-    %define $distance ebp-4
     func_entry 4
+    %define %$x1 ebp+8
+    %define %$x2 ebp+12
+    %define %$distance ebp-4
 
     ; eax = x1 - x2
-    mov eax, dword [$x1]
-    mov ebx, dword [$x2]
+    mov eax, dword [%$x1]
+    mov ebx, dword [%$x2]
     sub eax, ebx
-    func_call [$distance], abs_int, eax
+    func_call [%$distance], abs_int, eax
 
-    func_exit [$distance]
-    %pop
+    func_exit [%$distance]
 
 ;---------------------------------
 ;-------------- Main -------------
