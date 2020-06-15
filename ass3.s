@@ -473,7 +473,7 @@ rng:
     func_exit
 
 ; generates a new 'random' 'real' (floating point) number in the range [start, end]
-never_lucky: ; never_lucky(int start, int end)
+gen_rand_num_in_range: ; never_lucky(int start, int end)
     func_entry 4
     %define %$start ebp+8
     %define %$end ebp+12
