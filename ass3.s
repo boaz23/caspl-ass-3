@@ -536,6 +536,7 @@ distance_1d_int: ; distance_1d(int x1, int x2)
 ;---------------------------------
 %ifdef TEST_C
 global main_1
+global free_game_resources
 main_1:
 %else
 main:
@@ -562,7 +563,11 @@ main:
 
     .exit:
     dbg_print_line "Conrol returned to main"
+    %ifdef TEST_C
+    %else
     void_call free_game_resources
+    %endif
+    dbg_print_line "Exiting... (code %d)", [%$exit_code]
     func_exit [%$exit_code]
 
 initialize_game: ; initialize_game(): void
@@ -587,9 +592,10 @@ initialize_game: ; initialize_game(): void
     .initialize_drones:
     dbg_print_line "Initializing drones..."
     ; DronesArr = malloc(N * sizeof(drone*))
-    mov eax, [N]
+    mov eax, dword [N]
     shl eax, 2 ; eax *= 4, sizeof(T*) = 4 (pointer to any type size is 4 bytes)
     func_call [DronesArr], malloc, eax
+    dbg_print_line "Drones arr: 0x%04X", [DronesArr]
 
     mov dword [%$i], 0
     .initialize_drones_loop:
@@ -627,7 +633,6 @@ initialize_game: ; initialize_game(): void
         mov [drone_is_active(eax)], dword TRUE
 
         ; DronesArr[i] = drone
-        .test:
         mov eax, dword [%$drone]
         mov ebx, dword [DronesArr]
         mov ecx, dword [%$i]
@@ -726,6 +731,10 @@ free_game_resources: ; free_game_resources(): void
     %define %$i ebp-4
     %define %$cor ebp-8
 
+    dbg_print_line "Free game's resources..."
+    cmp dword [CORS], NULL
+    je .exit
+
     mov [%$i], dword 0
     .free_resources_loop:
         mov eax, dword [%$i]
@@ -756,6 +765,7 @@ free_game_resources: ; free_game_resources(): void
     void_call free, [DronesArr]
     void_call free, [CORS]
 
+    .exit:
     func_exit
 
 ; cmp_char(str, i, c, else)
@@ -788,8 +798,33 @@ free_game_resources: ; free_game_resources(): void
 %endmacro
 
 parse_command_line_args: ; parse_command_line_args(int argc, char *argv[]): bool
-    func_entry 4
+    func_entry 8
     %define %$are_args_valid ebp-4
+    %define %$i ebp-8
+    
+    .parse_debug_mode_arg:
+    mov dword [%$i], 1
+    .args_loop: ; for(i = 1; i < argc; i++)
+        ; if (i >= argc) break;
+        mov eax, dword [%$$argc]
+        cmp dword [%$i], eax
+        jge .args_loop_end
+        
+        ; arg = argv[i];
+        mov eax, dword [%$$argv]
+        mov ebx, dword [%$i]
+        mov ecx, dword [eax+4*ebx]
+        .check_dbg:
+            func_call eax, is_debug_mode_arg, ecx
+            cmp dword eax, FALSE
+            je .continue
+            mov dword [DebugMode], TRUE
+
+        .continue:
+        ; i++
+        inc dword [%$i]
+        jmp .args_loop
+    .args_loop_end:
 
     mov dword [%$are_args_valid], FALSE
     cmp dword [%$$argc], 6
@@ -811,20 +846,6 @@ parse_command_line_args: ; parse_command_line_args(int argc, char *argv[]): bool
     .parse_seed:
     parse_command_line_arg 5, "%hd", seed, .exit, "seed"
     
-    .parse_debug_mode_arg:
-    cmp dword [%$$argc], 7
-    jl .parse_successful
-    mov eax, [%$$argv]
-    mov eax, dword [eax+4*6]
-    func_call eax, is_debug_mode_arg, eax
-    cmp eax, FALSE
-    je .invalid_debug_arg
-    jmp .debug_mode_on
-    
-    .invalid_debug_arg:
-    printf_line "Expected debug mode arg as arg number 6"
-    .debug_mode_on:
-    mov dword [DebugMode], TRUE
     .debug_arg_prints:
     dbg_print_line "N = %d", [N]
     dbg_print_line "R = %d", [R]
