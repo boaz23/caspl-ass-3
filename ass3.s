@@ -189,7 +189,7 @@ STK_UNIT EQU 4
     mov %4, %1
 %endmacro
 
-%macro dbg_printf_line 1-*
+%macro dbg_print_line 1-*
     ; if (DebugMode) printf(args);
     cmp dword [DebugMode], FALSE
     je %%not_debug_mode
@@ -540,10 +540,24 @@ distance_1d_int: ; distance_1d(int x1, int x2)
 ;-------------- Main -------------
 ;---------------------------------
 main:
-    func_entry
+    func_entry 4
+    %define %$argc ebp+8
+    %define %$argv ebp+12
+    %define %$exit_code ebp-4
 
-    mov dword [LSFR], 00000F5A5h
-    mov dword [DebugMode], TRUE
+    finit
+    mov dword [%$exit_code], 0
+
+    func_call eax, parse_command_line_args, [%$argc], [%$argv]
+    ; check if args are valid
+    cmp eax, FALSE
+    jne .arg_valid
+    mov dword [%$exit_code], 1
+    jmp .exit
+    .arg_valid:
+    ; LSFR = seed
+    movzx eax, word [seed]
+    mov dword [LSFR], eax
 
     func_call [CORS], malloc, COR_SIZE*3
     mov eax, dword [CORS]
@@ -557,6 +571,107 @@ main:
     
     void_call start_co, 2
 
+    printf_line "Conrol returned to main"
     void_call free, [CORS]
 
-    func_exit
+    .exit:
+    func_exit [%$exit_code]
+
+; cmp_char(str, i, c, else)
+; if (str[i] != c) goto else;
+%macro cmp_char 4
+    mov eax, %1
+    mov al, byte [eax+%2]
+    cmp al, %3
+    jne %4
+%endmacro
+
+%push
+%define %$argc ebp+8
+%define %$argv ebp+12
+
+%macro parse_command_line_arg 5
+    section .rodata
+        %%format: db %2, NULL_TERMINATOR
+    section .text
+        mov eax, dword [%$$argv]
+        mov eax, dword [eax+4*%1]
+        func_call eax, sscanf, eax, %%format, %3
+        cmp eax, 1
+        je %%arg_valid
+        %%arg_invalid:
+        printf_line {"Invalid command line arg: ", %5}
+        jmp %4
+        %%arg_valid:
+        nop
+%endmacro
+
+parse_command_line_args: ; parse_command_line_args(int argc, char *argv[]): bool
+    func_entry 4
+    %define %$are_args_valid ebp-4
+
+    mov dword [%$are_args_valid], FALSE
+    cmp dword [%$$argc], 6
+    jge .enough_args
+    printf_line "Expected at least 5 args, got %d", [%$$argc]
+    jmp .exit
+
+    .enough_args:
+    .parse_N:
+    parse_command_line_arg 1, "%d", N, .exit, "N"
+    .parse_R:
+    parse_command_line_arg 2, "%d", R, .exit, "R"
+    .parse_K:
+    parse_command_line_arg 3, "%d", K, .exit, "K"
+    .parse_d:
+    parse_command_line_arg 4, "%f", d, .exit, "d"
+    fld dword [d]
+    fstp qword [d]
+    .parse_seed:
+    parse_command_line_arg 5, "%hd", seed, .exit, "seed"
+    
+    .parse_debug_mode_arg:
+    cmp dword [%$$argc], 7
+    jl .parse_successful
+    mov eax, [%$$argv]
+    mov eax, dword [eax+4*6]
+    func_call eax, is_debug_mode_arg, eax
+    cmp eax, FALSE
+    je .invalid_debug_arg
+    jmp .debug_mode_on
+    
+    .invalid_debug_arg:
+    printf_line "Expected debug mode arg as arg number 6"
+    .debug_mode_on:
+    mov dword [DebugMode], TRUE
+    .debug_arg_prints:
+    dbg_print_line "N = %d", [N]
+    dbg_print_line "R = %d", [R]
+    dbg_print_line "K = %d", [K]
+    dbg_print_double "d = ", d
+    dbg_print_line "seed = %hd, %04X", [seed], [seed]
+
+    .parse_successful:
+    ; are_args_valid = true;
+    mov dword [%$are_args_valid], TRUE
+
+    .exit:
+    func_exit [%$are_args_valid]
+
+is_debug_mode_arg: ; is_arg_debug(char *arg): boolean
+    func_entry 4
+    %define $arg ebp+8
+    %define $is_dbg ebp-4
+
+    ; is_dbg = false;
+    mov dword [$is_dbg], FALSE
+    cmp_char dword [$arg], 0, '-', .exit                ; if (arg[0] != '-')  goto exit;
+    cmp_char dword [$arg], 1, 'D', .exit                ; if (arg[1] != 'd')  goto exit;
+    cmp_char dword [$arg], 2, NULL_TERMINATOR, .exit    ; if (arg[2] != '\0') goto exit;
+    ; is_dbg = true;
+    mov dword [$is_dbg], TRUE
+
+    .exit:
+    func_exit [$is_dbg]
+%undef parse_command_line_arg
+%pop
