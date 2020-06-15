@@ -338,7 +338,12 @@ section .data
 
 section .text
 align 16
+%ifdef TEST_C
+global main_1
+global free_game_resources
+%else
 global main
+%endif
 
 extern printf
 extern fprintf
@@ -535,8 +540,6 @@ distance_1d_int: ; distance_1d(int x1, int x2)
 ;-------------- Main -------------
 ;---------------------------------
 %ifdef TEST_C
-global main_1
-global free_game_resources
 main_1:
 %else
 main:

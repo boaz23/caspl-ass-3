@@ -38,7 +38,6 @@ extern int CoId_Printer;
 extern int CoId_Target;
 
 extern int main_1(int argc, char *argv[]);
-extern void (*free_game_resources)(void);
 extern void (*drone_co_func)();
 
 void print_info() {
@@ -56,6 +55,5 @@ void print_info() {
 int main(int argc, char *argv[]) {
     main_1(argc, argv);
     print_info();
-    free_game_resources();
     return 0;
 }

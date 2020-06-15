@@ -25,7 +25,7 @@ test_c:
 		;\
 	)
 	$(CC) $(CC_FLAGS) -c $(TEST_DIR)/test.c -o $(TEST_DIR)/test.o
-	$(CC) $(CC_FLAGS) $(TEST_DIR)/test.o $(OBJECTS) -o $(TEST_DIR)/test
+	$(CC) $(CC_FLAGS) $(OBJECTS) $(TEST_DIR)/test.o -o $(TEST_DIR)/test
 
 $(PRG_NAME): $(OBJECTS)
 	$(CC) -o $(BIN_DIR)/$(PRG_NAME) $(CC_FLAGS) $(OBJECTS)
