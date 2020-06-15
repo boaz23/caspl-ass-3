@@ -9,18 +9,23 @@ SRC_DIR         := .
 OBJ_DIR         := bin
 LIST_DIR        := bin
 BIN_DIR         := bin
-
 TEST_DIR        := test
 
-PRG_NAME        := ass3
-OBJECTS         := $(OBJ_DIR)/ass3.o $(OBJ_DIR)/scheduler.o $(OBJ_DIR)/printer.o $(OBJ_DIR)/drone.o $(OBJ_DIR)/target.o
+PRG_NAME := ass3
+SRCS     := $(wildcard $(SRC_DIR)/*.s)
+OBJECTS  := $(subst .s,.o,$(subst $(SRC_DIR)/,$(OBJ_DIR)/,$(SRCS)))
 
 all: $(PRG_NAME)
 
-test_c:
-	$(ASM) $(ASM_FLAGS) -DTEST_C $(SRC_DIR)/calc.s -o $(TEST_DIR)/calc.o -l $(TEST_DIR)/calc-test.lst
+test_c: 
+	$(foreach file,$(SRCS),\
+		$(ASM) $(ASM_FLAGS) -DTEST_C $(file) -o\
+		$(subst .s,.o,$(subst $(SRC_DIR)/,$(OBJ_DIR)/,$(file)))\
+		-l $(subst .s,.lst,$(subst $(SRC_DIR)/,$(LIST_DIR)/,$(file)))\
+		;\
+	)
 	$(CC) $(CC_FLAGS) -c $(TEST_DIR)/test.c -o $(TEST_DIR)/test.o
-	$(CC) $(CC_FLAGS) $(TEST_DIR)/test.o $(TEST_DIR)/calc.o -o $(TEST_DIR)/test
+	$(CC) $(CC_FLAGS) $(TEST_DIR)/test.o $(OBJECTS) -o $(TEST_DIR)/test
 
 $(PRG_NAME): $(OBJECTS)
 	$(CC) -o $(BIN_DIR)/$(PRG_NAME) $(CC_FLAGS) $(OBJECTS)

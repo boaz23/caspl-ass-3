@@ -152,44 +152,12 @@ STK_UNIT EQU 4
     mov %3, %2
     mov %1, %3
 %endmacro
-
 %macro mem_mov 2
     mem_mov %1, %2, eax
 %endmacro
 
-; deref(p_res, p_src, reg, fld)
-%macro deref 4
-    mov %3, %2
-    mem_mov %3, %1, [%4(%3)]
-%endmacro
-
-; deref(p_res, p_src, fld)
-%macro deref 3
-    deref %1, %2, eax, %3
-%endmacro
-
-; SIGNATURE: mem_swap(r1, m1, r2, m2)
-; DESCRIPTION:
-;   Swaps the values in m1 and m2 using r1 and r2
-;   as intermediate places to store m1 and m2 respectively
-; EXAMPLE: mem_mov ebx, [ebp-4], [ebp+8]
-;   This will copy the value at the memory address ebp+8 to ebp-4
-;   while using ebx as an intermediate place to store the result of [ebp+8]
-; NOTES:
-;   * This can be used to swap the values in two memory locations
-;     while specifying the intermediate registers used
-;     (but can also be used with any arbitrary combination of registers and memory)
-;   * If used for swapping the values in two memory locations,
-;     the registers implicitly determines the operand's sizes
-;   * Operand sizes can also be specified explicitly
-%macro mem_swap 4
-    mov %1, %2
-    mov %3, %4
-    mov %2, %3
-    mov %4, %1
-%endmacro
-
 %macro dbg_print_line 1-*
+    %%dbg_print:
     ; if (DebugMode) printf(args);
     cmp dword [DebugMode], FALSE
     je %%not_debug_mode
@@ -198,16 +166,23 @@ STK_UNIT EQU 4
     %%not_debug_mode:
 %endmacro
 
+%macro mem_double_mov 2-3 eax
+    mem_mov [%1], [%2], %3
+    mem_mov [%1+4], [%2+4], %3
+%endmacro
+
 %macro print_double 1
     void_call printf, FloatPrintFormat, [%1], [%1+4]
 %endmacro
 %macro dbg_print_double 2
+    %%dbg_print_double:
     cmp dword [DebugMode], FALSE
     je %%not_debug_mode
     fprintf_line [stderr], {%1, "%.2f"}, [%2], [%2+4]
     %%not_debug_mode:
 %endmacro
 %macro dbg_print_double_st 0
+    %%dbg_print_double_st:
     cmp dword [DebugMode], FALSE
     je %%not_debug_mode
 
@@ -226,10 +201,6 @@ STK_UNIT EQU 4
     call resume
     pop ebx
 %endmacro
-
-UI16_MAX_VALUE EQU 0FFFFh
-
-BOARD_SIZE EQU 100
 
 ;struct drone {
 ;    double x;
@@ -250,9 +221,28 @@ sizeof_drone EQU 40
 section .rodata
     align 16
 
+    global BoardWidth
+    global BoardHeight
+    global DroneMaxSpeed
+    global MaxAngle
+
+    global FloatPrintFormat
+    global FloatPrintFormat_NewLine
+
     ; constants
-    BoardSize: dd BOARD_SIZE
+    UI16_MAX_VALUE EQU 0FFFFh
+    BOARD_WIDTH  EQU 100
+    BOARD_HEIGHT EQU 100
+    DRONE_MAX_SPEED EQU 100
+    MAX_ANGLE EQU 360
+
     UI16MaxValue: dd UI16_MAX_VALUE
+    BoardWidth: dd BOARD_WIDTH
+    BoardHeight: dd BOARD_HEIGHT
+    DroneMaxSpeed: dd DRONE_MAX_SPEED
+    MaxAngle: dd MAX_ANGLE
+
+    ; formats
     FloatPrintFormat: db "%.2f", NULL_TERMINATOR
     FloatPrintFormat_NewLine: db "%.2f", NEW_LINE_TERMINATOR, NULL_TERMINATOR
 
@@ -285,7 +275,9 @@ section .data
 
     ; program state globals
     global LSFR
+    global RandomNumber
     global TargetPosition
+    global DronesArr
 
     ; NOTE: float point better be in double precision (64-bit, double)
     ;       because printf cannot deal with single precision (32-bit, float)
@@ -296,6 +288,7 @@ section .data
     ; the assignment page says to use globals and that all globals should
     ; sit in this file
     TargetPosition: dq 0, 0 ; (double x, double y)
+    DronesArr: dd NULL
 
     ; co-routines: global state and temporary variables
     global CORS
@@ -309,35 +302,36 @@ section .data
     BPT:     dd NULL
     SPMAIN:  dd NULL ; main's stack pointer
 
-    COR_SIZE equ 16
-
-    CODEP  equ 0
-    FLAGSP equ 4
-    SPP    equ 8
-    BPP    equ 12
     ;struct COR {
     ;    void (*func)(); // func pointer
     ;    int flags;
     ;    void *spp; // stack pointer
     ;    void *bpp; // base pointer
+    ;    void *hsp; // pointer for lowest stack address
     ;}
+    CODEP  equ 0
+    FLAGSP equ 4
+    SPP    equ 8
+    BPP    equ 12
+    HSP    equ 16
+    sizeof_COR equ 20
 
     ; co-routines: static co-routines initialization
     CO_ARGS_COUNT equ 1
     %define co_routine_bp_offset(sp) sp+STKSZ-((CO_ARGS_COUNT + 2) * STK_UNIT)
-    %define define_co_routine(func, sp) dd func, 0, co_routine_bp_offset(sp), co_routine_bp_offset(sp)
+    %define define_co_routine(func, sp) dd func, 0, co_routine_bp_offset(sp), co_routine_bp_offset(sp), sp
     
     CO_SCHEDULER: define_co_routine(scheduler_co_func, STK_SCHEDULER)
     CO_PRINTER:   define_co_routine(printer_co_func,   STK_PRINTER)
     CO_TARGET:    define_co_routine(target_co_func,    STK_TARGET)
 
-    global CO_ID_SCHEDULER
-    global CO_ID_PRINTER
-    global CO_ID_TARGET
+    global CoId_Scheduler
+    global CoId_Printer
+    global CoId_Target
 
-    CO_ID_SCHEDULER: dd -1
-    CO_ID_PRINTER:   dd -1
-    CO_ID_TARGET:    dd -1
+    CoId_Scheduler: dd -1
+    CoId_Printer:   dd -1
+    CoId_Target:    dd -1
 
     %undef define_co_routine
     %undef co_routine_bp_offset
@@ -360,10 +354,11 @@ extern free
 
 global resume
 global end_co
-global never_lucky
+global gen_rand_num_in_range
 extern scheduler_co_func
 extern printer_co_func
 extern target_co_func
+extern drone_co_func
 
 ;-----------------------------------------
 ;-------------- CO-ROUTINES --------------
@@ -473,7 +468,7 @@ rng:
     func_exit
 
 ; generates a new 'random' 'real' (floating point) number in the range [start, end]
-gen_rand_num_in_range: ; never_lucky(int start, int end)
+gen_rand_num_in_range: ; gen_rand_num_in_range(int start, int end): void
     func_entry 4
     %define %$start ebp+8
     %define %$end ebp+12
@@ -539,7 +534,12 @@ distance_1d_int: ; distance_1d(int x1, int x2)
 ;---------------------------------
 ;-------------- Main -------------
 ;---------------------------------
+%ifdef TEST_C
+global main_1
+main_1:
+%else
 main:
+%endif
     func_entry 4
     %define %$argc ebp+8
     %define %$argv ebp+12
@@ -555,27 +555,208 @@ main:
     mov dword [%$exit_code], 1
     jmp .exit
     .arg_valid:
+
+    .start_game:
+    void_call initialize_game
+    void_call start_co, [CoId_Scheduler]
+
+    .exit:
+    dbg_print_line "Conrol returned to main"
+    void_call free_game_resources
+    func_exit [%$exit_code]
+
+initialize_game: ; initialize_game(): void
+    func_entry 12
+    %define %$i ebp-4
+    %define %$drone ebp-8
+    %define %$cor ebp-12
+
+    .initialize_lsfr:
     ; LSFR = seed
     movzx eax, word [seed]
     mov dword [LSFR], eax
 
-    func_call [CORS], malloc, COR_SIZE*3
-    mov eax, dword [CORS]
-    mov dword [eax+0], CO_PRINTER
-    mov dword [eax+4], CO_TARGET
-    mov dword [eax+8], CO_SCHEDULER
+    .initialize_targets:
+    ; initialize target's position
+    void_call gen_rand_num_in_range, 0, BOARD_WIDTH
+    mem_double_mov TargetPosition, RandomNumber
+    void_call gen_rand_num_in_range, 0, BOARD_HEIGHT
+    mem_double_mov TargetPosition+8, RandomNumber
+    dbg_print_line "Target position: %.2f, %.2f", [TargetPosition], [TargetPosition+4], [TargetPosition+8], [TargetPosition+12]
 
-    void_call init_co, 0
-    void_call init_co, 1
-    void_call init_co, 2
-    
-    void_call start_co, 2
+    .initialize_drones:
+    dbg_print_line "Initializing drones..."
+    ; DronesArr = malloc(N * sizeof(drone*))
+    mov eax, [N]
+    shl eax, 2 ; eax *= 4, sizeof(T*) = 4 (pointer to any type size is 4 bytes)
+    func_call [DronesArr], malloc, eax
 
-    printf_line "Conrol returned to main"
+    mov dword [%$i], 0
+    .initialize_drones_loop:
+        mov eax, dword [%$i]
+        cmp eax, dword [N]
+        jge .initialize_drones_loop_end
+
+        ; initialize drone
+        func_call [%$drone], malloc, sizeof_drone
+        
+        ; drone->x = rand(0, BOARD_WIDTH)
+        void_call gen_rand_num_in_range, 0, BOARD_WIDTH
+        mov eax, [%$drone]
+        mem_double_mov drone_x(eax), RandomNumber, ebx
+
+        ; drone->y = rand(0, BOARD_HEIGHT)
+        void_call gen_rand_num_in_range, 0, BOARD_HEIGHT
+        mov eax, [%$drone]
+        mem_double_mov drone_y(eax), RandomNumber, ebx
+
+        ; drone->speed = rand(0, DRONE_MAX_SPEED)
+        void_call gen_rand_num_in_range, 0, DRONE_MAX_SPEED
+        mov eax, [%$drone]
+        mem_double_mov drone_speed(eax), RandomNumber, ebx
+
+        ; drone->angle = rand(0, MAX_ANGLE)
+        void_call gen_rand_num_in_range, 0, MAX_ANGLE
+        mov eax, [%$drone]
+        mem_double_mov drone_angle(eax), RandomNumber, ebx
+
+        ; drone->score = 0
+        mov eax, [%$drone]
+        mov [drone_score(eax)], dword 0
+        ; drone->is_active = true
+        mov [drone_is_active(eax)], dword TRUE
+
+        ; DronesArr[i] = drone
+        .test:
+        mov eax, dword [%$drone]
+        mov ebx, dword [DronesArr]
+        mov ecx, dword [%$i]
+        mov dword [ebx+4*ecx], eax
+
+        mov eax, dword [%$drone]
+        dbg_print_line "Drone %d: 0x%08X", [%$i], eax
+        mov eax, dword [%$drone]
+        dbg_print_double "x: ", drone_x(eax)
+        mov eax, dword [%$drone]
+        dbg_print_double "y: ", drone_y(eax)
+        mov eax, dword [%$drone]
+        dbg_print_double "speed: ", drone_speed(eax)
+        mov eax, dword [%$drone]
+        dbg_print_double "angle: ", drone_angle(eax)
+        mov eax, dword [%$drone]
+        dbg_print_line "score: %d", [drone_score(eax)]
+        mov eax, dword [%$drone]
+        dbg_print_line "is_active: %d", [drone_is_active(eax)]
+        dbg_print_line "-----"
+
+        inc dword [%$i]
+        jmp .initialize_drones_loop
+    .initialize_drones_loop_end:
+    nop
+
+    .initialize_co_routines:
+    dbg_print_line "Initializing co-routines..."
+    ; CORS = malloc((N+3) * sizeof(COR*))
+    mov eax, [N]
+    add eax, 3 ; 3 statically initialized co-routines
+    shl eax, 2
+    func_call [CORS], malloc, eax
+
+    mov dword [%$i], 0
+    .initialize_drone_co_routine_loop:
+        mov eax, dword [%$i]
+        cmp eax, dword [N]
+        jge .initialize_drone_co_routine_loop_end
+
+        func_call eax, malloc, sizeof_COR
+        mov dword [%$cor], eax
+
+        mov dword [eax+CODEP], drone_co_func
+        mov dword [eax+FLAGSP], 0
+        ; initialize co-routine stack
+        
+        ; cor->hsp = malloc(STKSZ)
+        func_call eax, malloc, STKSZ
+        mov ebx, [%$cor]
+        mov dword [ebx+HSP], eax
+        ; cor->spp = cor->bpp = cor->hsp+STKSZ-((CO_ARGS_COUNT + 2) * STK_UNIT)
+        add eax, STKSZ-((CO_ARGS_COUNT + 2) * STK_UNIT)
+        mov dword [ebx+SPP], eax
+        mov dword [ebx+BPP], eax
+
+        ; CORS[i] = cor
+        mov eax, dword [%$cor]
+        mov ebx, dword [CORS]
+        mov ecx, dword [%$i]
+        mov dword [ebx+4*ecx], eax
+
+        ; init_co(i)
+        void_call init_co, [%$i]
+
+        inc dword [%$i]
+        jmp .initialize_drone_co_routine_loop
+    .initialize_drone_co_routine_loop_end:
+
+    ; add pointers to the static co-routines
+    mov ecx, dword [%$i]
+    mov ebx, dword [CORS]
+    mov dword [ebx+4*ecx], CO_SCHEDULER
+    mov dword [CoId_Scheduler], ecx
+    void_call init_co, ecx
+    inc dword [%$i]
+
+    mov ecx, dword [%$i]
+    mov ebx, dword [CORS]
+    mov dword [ebx+4*ecx], CO_PRINTER
+    mov dword [CoId_Printer], ecx
+    void_call init_co, ecx
+    inc dword [%$i]
+
+    mov ecx, dword [%$i]
+    mov ebx, dword [CORS]
+    mov dword [ebx+4*ecx], CO_TARGET
+    mov dword [CoId_Target], ecx
+    void_call init_co, ecx
+    inc dword [%$i]
+
+    func_exit
+
+free_game_resources: ; free_game_resources(): void
+    func_entry 8
+    %define %$i ebp-4
+    %define %$cor ebp-8
+
+    mov [%$i], dword 0
+    .free_resources_loop:
+        mov eax, dword [%$i]
+        cmp eax, dword [N]
+        jge .free_resources_loop_end
+
+        ; free(DronesArr[i])
+        mov ebx, dword [DronesArr]
+        mov ecx, dword [%$i]
+        mov eax, dword [ebx+4*ecx]
+        void_call free, eax
+
+        ; cor = CORS[i]
+        mov ebx, dword [CORS]
+        mov ecx, dword [%$i]
+        mov eax, dword [ebx+4*ecx]
+        mov [%$cor], eax
+        ; free(cor->hsp)
+        add eax, HSP
+        void_call free, [eax]
+        ; free(cor)
+        void_call free, [%$cor]
+
+        inc dword [%$i]
+        jmp .free_resources_loop
+    .free_resources_loop_end:
+
+    void_call free, [DronesArr]
     void_call free, [CORS]
 
-    .exit:
-    func_exit [%$exit_code]
+    func_exit
 
 ; cmp_char(str, i, c, else)
 ; if (str[i] != c) goto else;
