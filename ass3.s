@@ -340,7 +340,6 @@ section .text
 align 16
 %ifdef TEST_C
 global main_1
-global free_game_resources
 %else
 global main
 %endif

@@ -38,7 +38,7 @@ extern int CoId_Printer;
 extern int CoId_Target;
 
 extern int main_1(int argc, char *argv[]);
-extern void (*drone_co_func)();
+typedef void (*f)();
 
 void print_info() {
     if (DronesArr) {
