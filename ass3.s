@@ -278,6 +278,7 @@ section .data
     global RandomNumber
     global TargetPosition
     global DronesArr
+    global RandomNumber
 
     ; NOTE: float point better be in double precision (64-bit, double)
     ;       because printf cannot deal with single precision (32-bit, float)
@@ -289,6 +290,9 @@ section .data
     ; sit in this file
     TargetPosition: dq 0, 0 ; (double x, double y)
     DronesArr: dd NULL
+
+    ; the drone strcut array
+    DroneArr: dd NULL
 
     ; co-routines: global state and temporary variables
     global CORS
@@ -468,7 +472,7 @@ rng:
     func_exit
 
 ; generates a new 'random' 'real' (floating point) number in the range [start, end]
-gen_rand_num_in_range: ; gen_rand_num_in_range(int start, int end): void
+gen_rand_num_in_range: ; gen_rand_num_in_range(int start, int end)
     func_entry 4
     %define %$start ebp+8
     %define %$end ebp+12
