@@ -50,8 +50,6 @@ one_eighty:	dd 	180.0
 section .text
 global drone_co_func
 
-
-
 extern DronesArr
 extern DroneMaxSpeed
 
