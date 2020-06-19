@@ -75,4 +75,7 @@ scheduler_co_func:
 	mov	EBX, [CoId_Target]
 	call	dword resume
 
+	mov	EBX, 1
+	call	dword resume
+
 	jmp end_co

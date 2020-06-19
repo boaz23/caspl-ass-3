@@ -52,6 +52,7 @@ void print_info() {
         printf("\n");
     }
 }
+
 int main(int argc, char *argv[]) {
     main_1(argc, argv);
     print_info();
