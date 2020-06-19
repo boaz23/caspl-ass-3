@@ -242,6 +242,8 @@ section .text
     extern resume
     extern end_co
     extern printf
+    extern fprintf
+    extern stderr
 
     global scheduler_co_func
 
@@ -252,10 +254,10 @@ section .text
     mov eax, %2
     cmp %1, eax
     je %%no_value_reset
-    %%no_value_reset:
-    nop
     %%value_reset:
     mov %1, 0
+    %%no_value_reset:
+    nop
 %endmacro
     
 scheduler_co_func:
@@ -267,7 +269,15 @@ scheduler_co_func:
     %define %$drone_id ebp-20
     %define %$winner_id ebp-24
     %define %$tmp_drone_id ebp-28
+    push ebp
+    mov ebp, esp
+    sub esp, 32
 
+    .scheduler_start:
+    nop
+    dbg_print_line "SCHEDULER"
+
+    .init_scheduler_vars:
     mov dword [%$i], 0
     mov dword [%$round], 0
     mov dword [%$rounds_since_last_elim_round], 0
@@ -278,14 +288,13 @@ scheduler_co_func:
         dbg_print_line "----------"
         dbg_print_line "scheduler"
         dbg_print_line "i: %d", [%$i]
-        dbg_print_line "round: %d", [%$round]
         dbg_print_line "drone id: %d", [%$drone_id]
-        dbg_print_line "rounds since last elim round: %d", [%$rounds_since_last_elim_round]
         dbg_print_line "steps since last printer: %d", [%$steps_since_last_printer]
 
         ; print
         ; check whether we should print the board
         ; if (steps_since_last_printer == 0) print board
+        .check_board_print:
         cmp dword [%$steps_since_last_printer], 0
         jne .no_print_board
         .print_board:
@@ -335,23 +344,6 @@ scheduler_co_func:
         mov dword [drone_is_active(eax)], FALSE
         .no_drone_elim:
         nop
-        
-        .check_if_round_ended:
-        ; if (drone_id == N) round ended
-        mov eax, dword [N]
-        cmp dword [%$drone_id], eax
-        je .round_continue
-
-        .next_round:
-        ; init vars for the next round
-        dbg_print_line "Next game round"
-        inc dword [%$round]
-        inc_round_modulo dword [%$rounds_since_last_elim_round], dword [R]
-        mov dword [%$drone_id], -1 ; will be incremented to 0
-        jmp .loop_increment
-
-        .round_continue:
-        nop
 
         .check_if_drone_is_active:
         ; if (!DronesArr[drone_id]->is_active) continue;
@@ -368,8 +360,27 @@ scheduler_co_func:
 
         ; next step
         .loop_increment:
-        inc_round_modulo dword [%$steps_since_last_printer], dword [K]
         inc dword [%$drone_id]
+
+        .check_if_round_ended:
+        ; if (drone_id == N) round ended
+        mov eax, dword [N]
+        cmp dword [%$drone_id], eax
+        jl .round_continue
+
+        .next_round:
+        ; init vars for the next round
+        inc dword [%$round]
+        inc_round_modulo dword [%$rounds_since_last_elim_round], dword [R]
+        mov dword [%$drone_id], 0
+
+        dbg_print_line "Next game round: %d", [%$round]
+        dbg_print_line "rounds since last elim round: %d", [%$rounds_since_last_elim_round]
+        .round_continue:
+        nop
+        
+        .loop_increment2:
+        inc_round_modulo dword [%$steps_since_last_printer], dword [K]
         inc dword [%$i]
         jmp .scheduler_loop
     .scheduler_loop_end:
