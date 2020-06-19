@@ -218,6 +218,12 @@ STK_UNIT EQU 4
 %define drone_is_active(d) d+36
 sizeof_drone EQU 40
 
+UI16_MAX_VALUE EQU 0FFFFh
+BOARD_WIDTH  EQU 100
+BOARD_HEIGHT EQU 100
+DRONE_MAX_SPEED EQU 100
+MAX_ANGLE EQU 360
+
 section .rodata
     align 16
 
@@ -230,11 +236,6 @@ section .rodata
     global FloatPrintFormat_NewLine
 
     ; constants
-    UI16_MAX_VALUE EQU 0FFFFh
-    BOARD_WIDTH  EQU 100
-    BOARD_HEIGHT EQU 100
-    DRONE_MAX_SPEED EQU 100
-    MAX_ANGLE EQU 360
 
     UI16MaxValue: dd UI16_MAX_VALUE
     BoardWidth: dd BOARD_WIDTH
@@ -278,7 +279,7 @@ section .data
     global RandomNumber
     global TargetPosition
     global DronesArr
-    global RandomNumber
+    global CurrentDroneId
 
     ; NOTE: float point better be in double precision (64-bit, double)
     ;       because printf cannot deal with single precision (32-bit, float)
@@ -290,9 +291,7 @@ section .data
     ; sit in this file
     TargetPosition: dq 0, 0 ; (double x, double y)
     DronesArr: dd NULL
-
-    ; the drone strcut array
-    DroneArr: dd NULL
+    CurrentDroneId: dd -1
 
     ; co-routines: global state and temporary variables
     global CORS
