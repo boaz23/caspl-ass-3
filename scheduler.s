@@ -276,6 +276,7 @@ scheduler_co_func:
     .scheduler_loop:
         ; print
         ; check whether we should print the board
+        ; if (steps_since_last_printer == 0) print board
         cmp dword [%$steps_since_last_printer], 0
         jne .no_print_board
         .print_board:
@@ -286,16 +287,24 @@ scheduler_co_func:
         ; eliminate drone
         ; check whether we need to eliminate a drone
         .check_for_elim_round:
+
         ; check if we're at the very first step of the sceduler loop
+        ; if (i == 0) skip elimination
         cmp dword [%$i], 0
         je .no_drone_elim
+
         ; check if we are at the start of a round
+        ; if (drone_id > 0) skip elimination
         cmp dword [%$drone_id], 0
         jg .no_drone_elim
+
         ; check if we are at an elimination round
+        ; if (rounds_since_last_elim_round != 0) skip elimination
         cmp dword [%$rounds_since_last_elim_round], 0
         jne .no_drone_elim
+
         .eliminate_drone:
+        ; DronesArr[find_drone_id_with_lowest_score()]->is_active = false
         func_call eax, find_drone_id_with_lowest_score
         mov ebx, dword [DronesArr]
         mov eax, dword [ebx+4*eax]
@@ -304,6 +313,9 @@ scheduler_co_func:
         nop
 
         .check_if_game_ended:
+        ; eax = find_only_one_drone_left()
+        ; if (eax >= 0) winner is eax
+        ; else { continue game }
         func_call eax, find_only_one_drone_left
         cmp eax, 0
         jl .continue_game
@@ -313,19 +325,23 @@ scheduler_co_func:
         nop
         
         .check_if_round_ended:
+        ; if (drone_id == N) round ended
         mov eax, dword [N]
         cmp dword [%$drone_id], eax
         je .round_continue
+
         .next_round:
         ; init vars for the next round
         inc dword [%$round]
         inc_round_modulo dword [%$rounds_since_last_elim_round], dword [R]
         mov dword [%$drone_id], -1 ; will be incremented to 0
         jmp .loop_increment
+
         .round_continue:
         nop
 
         .check_if_drone_is_active:
+        ; if (!DronesArr[drone_id]->is_active) continue;
         mov eax, [%$drone_id]
         mov ebx, dword [DronesArr]
         mov eax, dword [ebx+4*eax]
@@ -353,39 +369,53 @@ scheduler_co_func:
     jmp end_co
     %pop
 
-; (start not included)
-find_next_active_drone_id: ; find_next_active_drone(int start)
-    func_entry 4
-    %define %$start ebp+8
-    %define %$i ebp-4
+find_drone_id_with_lowest_score: ; find_drone_with_lowest_score(): int
+    func_entry 12
+    %define %$drone_id_with_min_score ebp-4
+    %define %$min_score ebp-8
+    %define %$i ebp-12
 
-    mem_mov dword [%$i], dword [%$start]
-    inc dword [%$i]
+    ; i = 0
+    mov dword [%$i], 1
+    ; drone_id_with_min_score = 1
+    mov dword [%$drone_id_with_min_score], 1
+    ; min_score = DronesArr[0]->score
+    mov eax, dword [DronesArr]
+    mov eax, [eax]
+    mov eax, [drone_score(eax)]
+    mov dword [%$min_score], eax
+
     .drone_arr_loop:
+    ; if (i == N) break;
     mov eax, dword [N]
     cmp dword [%$i], eax
-    jge .not_found
+    je .drone_arr_loop_end
 
+    ; if (!DronesArr[i]->is_active) continue;
     mov eax, dword [DronesArr]
     mov ebx, dword [%$i]
     mov eax, dword [eax+4*ebx]
     cmp dword [drone_is_active(eax)], FALSE
     je .drone_arr_loop_continue
-    jmp .found
+    
+    ; if (min_score < DronesArr[i]->score) set new min vars
+    mov ebx, dword [drone_score(eax)]
+    cmp dword [%$min_score], ebx
+    jge .drone_arr_loop_continue
+
+    .new_min:
+    ; drone_id_with_min_score = i
+    mem_mov dword [%$drone_id_with_min_score], dword [%$i], ecx
+    ; min_score = DronesArr[i]->score
+    mov dword [%$min_score], ebx
 
     .drone_arr_loop_continue:
-    jmp .drone_arr_loop_end
+    inc dword [%$i]
+    jmp .drone_arr_loop
     .drone_arr_loop_end:
 
-    .not_found:
-        mov dword [%$i], -1
-        jmp .exit
-    .found:
-
     .exit:
-    func_exit [%$i]
-
-find_drone_id_with_lowest_score: ; find_drone_with_lowest_score(): int
+    func_exit [%$drone_id_with_min_score]
 
 ; if only 1 drone is left active, returns it's id. otherwise returns a negative number.
 find_only_one_drone_left: ; find_only_one_drone_left(): int
