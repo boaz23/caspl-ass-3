@@ -291,9 +291,6 @@ section .data
     TargetPosition: dq 0, 0 ; (double x, double y)
     DronesArr: dd NULL
 
-    ; the drone strcut array
-    DroneArr: dd NULL
-
     ; co-routines: global state and temporary variables
     global CORS
     global CURR
