@@ -264,39 +264,34 @@ scheduler_co_func:
     %define %$round ebp-8
     %define %$rounds_since_last_elim_round ebp-12
     %define %$steps_since_last_printer ebp-16
-
     %define %$drone_id ebp-20
-    %define %$next_drone_id ebp-24
-    ; stores the amount of drones seen in a round thus far in the round
-    %define %$drones_i_round ebp-28
+    %define %$winner_id ebp-24
 
     mov dword [%$i], 0
     mov dword [%$round], 0
     mov dword [%$rounds_since_last_elim_round], 0
     mov dword [%$steps_since_last_printer], 0
-
-    mov dword [%$drone_id], -1
-    mov dword [%$drones_i_round], 0
-    func_call [%$next_drone_id], find_next_active_drone_id, [%$drone_id]
+    mov dword [%$drone_id], 0
 
     .scheduler_loop:
+        ; print
         ; check whether we should print the board
         cmp dword [%$steps_since_last_printer], 0
         jne .no_print_board
         .print_board:
         co_resume dword [CoId_Printer]
-        jmp .check_for_elim_round
         .no_print_board:
         nop
 
+        ; eliminate drone
         ; check whether we need to eliminate a drone
         .check_for_elim_round:
         ; check if we're at the very first step of the sceduler loop
         cmp dword [%$i], 0
         je .no_drone_elim
         ; check if we are at the start of a round
-        cmp dword [%$drone_id], -1
-        jge .no_drone_elim
+        cmp dword [%$drone_id], 0
+        jg .no_drone_elim
         ; check if we are at an elimination round
         cmp dword [%$rounds_since_last_elim_round], 0
         jne .no_drone_elim
@@ -305,54 +300,52 @@ scheduler_co_func:
         mov ebx, dword [DronesArr]
         mov eax, dword [ebx+4*eax]
         mov dword [drone_is_active(eax)], FALSE
-        jmp .move_to_next_drone
         .no_drone_elim:
         nop
 
-        ; check if we have a next drone to run in this round
-        .move_to_next_drone:
-        mem_mov dword [%$drone_id], dword [%$next_drone_id]
-        cmp dword [%$drone_id], 0
-        jl .next_round
-
-        mem_mov dword [CurrentDroneId], dword [%$drone_id]
-        .next_drone_found:
-            ; find the next drone to run in this round
-            ; if the next drone id is < 0 (-1), therefore there are no drone left to run this round
-            inc dword [%$drones_i_round]
-            func_call [%$next_drone_id], find_next_active_drone_id, [%$drone_id]
-            cmp dword [%$next_drone_id], 0
-            jge .call_next_drone
-
-            .check_left_drones_count:
-            ; if only one is left, we got a winner
-            cmp dword [%$drones_i_round], 1
-            je .winner
-
+        .check_if_game_ended:
+        func_call eax, find_only_one_drone_left
+        cmp eax, 0
+        jl .continue_game
+        mov dword [%$winner_id], eax
+        jmp .winner
+        .continue_game:
+        nop
+        
+        .check_if_round_ended:
+        mov eax, dword [N]
+        cmp dword [%$drone_id], eax
+        je .round_continue
         .next_round:
-            ; init vars for the next round
-            inc dword [%$round]
-            inc dword [%$rounds_since_last_elim_round]
-            inc_round_modulo dword [%$rounds_since_last_elim_round], dword [R]
-        .next_round_init:
-            mov dword [%$drone_id], -1
-            mov dword [%$drones_i_round], 0
-            func_call [%$next_drone_id], find_next_active_drone_id, [%$drone_id]
-            jmp .scheduler_loop
+        ; init vars for the next round
+        inc dword [%$round]
+        inc_round_modulo dword [%$rounds_since_last_elim_round], dword [R]
+        mov dword [%$drone_id], -1 ; will be incremented to 0
+        jmp .loop_increment
+        .round_continue:
+        nop
+
+        .check_if_drone_is_active:
+        mov eax, [%$drone_id]
+        mov ebx, dword [DronesArr]
+        mov eax, dword [ebx+4*eax]
+        cmp dword [drone_is_active(eax)], FALSE
+        je .loop_increment
 
         .call_next_drone:
-        co_resume dword []
-
-        inc_round_modulo dword [%$steps_since_last_printer], dword [K]
+        mem_mov dword [CurrentDroneId], dword [%$drone_id]
+        co_resume dword [CurrentDroneId]
 
         ; next step
         .loop_increment:
+        inc_round_modulo dword [%$steps_since_last_printer], dword [K]
+        inc dword [%$drone_id]
         inc dword [%$i]
         jmp .scheduler_loop
     .scheduler_loop_end:
 
     .winner:
-        mov eax, [CurrentDroneId]
+        mov eax, [%$winner_id]
         inc eax
         printf_line "The Winner is drone: ", eax
     
@@ -393,3 +386,6 @@ find_next_active_drone_id: ; find_next_active_drone(int start)
     func_exit [%$i]
 
 find_drone_id_with_lowest_score: ; find_drone_with_lowest_score(): int
+
+; if only 1 drone is left active, returns it's id. otherwise returns a negative number.
+find_only_one_drone_left: ; find_only_one_drone_left(): int
