@@ -284,6 +284,18 @@ scheduler_co_func:
         .no_print_board:
         nop
 
+        .check_if_game_ended:
+        ; eax = find_last_active_drone_id()
+        ; if (eax >= 0) winner is eax
+        ; else { continue game }
+        func_call eax, find_last_active_drone_id
+        cmp eax, 0
+        jl .continue_game
+        mov dword [%$winner_id], eax
+        jmp .winner
+        .continue_game:
+        nop
+
         ; eliminate drone
         ; check whether we need to eliminate a drone
         .check_for_elim_round:
@@ -310,18 +322,6 @@ scheduler_co_func:
         mov eax, dword [ebx+4*eax]
         mov dword [drone_is_active(eax)], FALSE
         .no_drone_elim:
-        nop
-
-        .check_if_game_ended:
-        ; eax = find_only_one_drone_left()
-        ; if (eax >= 0) winner is eax
-        ; else { continue game }
-        func_call eax, find_only_one_drone_left
-        cmp eax, 0
-        jl .continue_game
-        mov dword [%$winner_id], eax
-        jmp .winner
-        .continue_game:
         nop
         
         .check_if_round_ended:
@@ -418,4 +418,47 @@ find_drone_id_with_lowest_score: ; find_drone_with_lowest_score(): int
     func_exit [%$drone_id_with_min_score]
 
 ; if only 1 drone is left active, returns it's id. otherwise returns a negative number.
-find_only_one_drone_left: ; find_only_one_drone_left(): int
+find_last_active_drone_id: ; find_last_active_drone_id(): int
+    func_entry 12
+    %define %$last_drone_id ebp-4
+    %define %$i ebp-12
+
+    ; i = 0
+    mov dword [%$i], 0
+    ; found_active = -1
+    mov dword [%$last_drone_id], -1
+
+    .drone_arr_loop:
+    ; if (i == N) break;
+    mov eax, dword [N]
+    cmp dword [%$i], eax
+    je .drone_arr_loop_end
+
+    ; if (!DronesArr[i]->is_active) continue;
+    mov eax, dword [DronesArr]
+    mov ebx, dword [%$i]
+    mov eax, dword [eax+4*ebx]
+    cmp dword [drone_is_active(eax)], FALSE
+    je .drone_arr_loop_continue
+
+    ; if (last_drone_id < 0)
+    cmp dword [%$last_drone_id], 0
+    jl .first_active_drone
+
+    .second_active_drone:
+        ; last_drone_id = -1
+        mov dword [%$last_drone_id], -1
+        ; break;
+        jmp .drone_arr_loop_end
+
+    .first_active_drone:
+        ; last_drone_id = i
+        mem_mov dword [%$last_drone_id], dword [%$i]
+
+    .drone_arr_loop_continue:
+    inc dword [%$i]
+    jmp .drone_arr_loop
+    .drone_arr_loop_end:
+
+    .exit:
+    func_exit [%$last_drone_id]
