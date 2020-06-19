@@ -266,6 +266,7 @@ scheduler_co_func:
     %define %$steps_since_last_printer ebp-16
     %define %$drone_id ebp-20
     %define %$winner_id ebp-24
+    %define %$tmp_drone_id ebp-28
 
     mov dword [%$i], 0
     mov dword [%$round], 0
@@ -274,12 +275,21 @@ scheduler_co_func:
     mov dword [%$drone_id], 0
 
     .scheduler_loop:
+        dbg_print_line "----------"
+        dbg_print_line "scheduler"
+        dbg_print_line "i: %d", [%$i]
+        dbg_print_line "round: %d", [%$round]
+        dbg_print_line "drone id: %d", [%$drone_id]
+        dbg_print_line "rounds since last elim round: %d", [%$rounds_since_last_elim_round]
+        dbg_print_line "steps since last printer: %d", [%$steps_since_last_printer]
+
         ; print
         ; check whether we should print the board
         ; if (steps_since_last_printer == 0) print board
         cmp dword [%$steps_since_last_printer], 0
         jne .no_print_board
         .print_board:
+        dbg_print_line "Calling printer"
         co_resume dword [CoId_Printer]
         .no_print_board:
         nop
@@ -317,7 +327,9 @@ scheduler_co_func:
 
         .eliminate_drone:
         ; DronesArr[find_drone_id_with_lowest_score()]->is_active = false
-        func_call eax, find_drone_id_with_lowest_score
+        func_call [%$tmp_drone_id], find_drone_id_with_lowest_score
+        dbg_print_line "Eliminating drone: %d", [%$tmp_drone_id]
+        mov eax, [%$tmp_drone_id]
         mov ebx, dword [DronesArr]
         mov eax, dword [ebx+4*eax]
         mov dword [drone_is_active(eax)], FALSE
@@ -332,6 +344,7 @@ scheduler_co_func:
 
         .next_round:
         ; init vars for the next round
+        dbg_print_line "Next game round"
         inc dword [%$round]
         inc_round_modulo dword [%$rounds_since_last_elim_round], dword [R]
         mov dword [%$drone_id], -1 ; will be incremented to 0
@@ -349,6 +362,7 @@ scheduler_co_func:
         je .loop_increment
 
         .call_next_drone:
+        dbg_print_line "Calling drone %d", [%$drone_id]
         mem_mov dword [CurrentDroneId], dword [%$drone_id]
         co_resume dword [CurrentDroneId]
 
