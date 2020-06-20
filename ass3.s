@@ -302,22 +302,19 @@ section .data
     CURR:    dd NULL
     CURR_ID: dd -1
     SPT:     dd NULL
-    BPT:     dd NULL
     SPMAIN:  dd NULL ; main's stack pointer
 
     ;struct COR {
     ;    void (*func)(); // func pointer
     ;    int flags;
     ;    void *spp; // stack pointer
-    ;    void *bpp; // base pointer
     ;    void *hsp; // pointer for lowest stack address
     ;}
     CODEP  equ 0
     FLAGSP equ 4
     SPP    equ 8
-    BPP    equ 12
-    HSP    equ 16
-    sizeof_COR equ 20
+    HSP    equ 12
+    sizeof_COR equ 16
 
     ; co-routines: static co-routines initialization
     CO_ARGS_COUNT equ 1
@@ -384,18 +381,14 @@ init_co: ; init_co(int co_routine_id)
     mov EAX, [EBX+CODEP] ; Get initial PC
     ; save stack and base pointers
     mov [SPT], ESP
-    mov [BPT], EBP
 
     mov ESP, [EBX+SPP]   ; Get initial SP
-    mov EBP, [EBX+BPP]   ; Also use as EBP
-    mov [EBP+8], ECX
     push EAX ; Push initial "return" address
     pushf    ; and flags
     pusha    ; and all other regs
     mov [EBX+SPP], ESP ; Save new SP in structure
 
     ; restore stack and base pointers
-    mov EBP, [BPT]
     mov ESP, [SPT]
 
     .init_done:
@@ -408,9 +401,8 @@ resume: ; resume(int ebx = resume_co_routine_id)
     pushfd
     pushad
     mov EDX, [CURR]
-    ; save stack and base pointer in co-routine structure
+    ; save stack pointer in co-routine structure
     mov [EDX+SPP], ESP
-    mov [EDX+BPP], EBP
 do_resume:
     .restore_state_of_resumed_routine:
     mov ECX, EBX
@@ -418,7 +410,6 @@ do_resume:
     mov EBX, [EBX+ECX*4]
 
     mov ESP, [EBX+SPP]  ; Load SP for resumed co-routine
-    mov EBP, [EBX+BPP]   ; Also use as EBP
     mov [CURR], EBX
     mov [CURR_ID], ECX
     popad ; Restore resumed co-routine state
@@ -692,7 +683,6 @@ initialize_game: ; initialize_game(): void
         ; cor->spp = cor->bpp = cor->hsp+STKSZ-((CO_ARGS_COUNT + 2) * STK_UNIT)
         add eax, STKSZ-((CO_ARGS_COUNT + 2) * STK_UNIT)
         mov dword [ebx+SPP], eax
-        mov dword [ebx+BPP], eax
 
         ; CORS[i] = cor
         mov eax, dword [%$cor]
