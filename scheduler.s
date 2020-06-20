@@ -250,6 +250,8 @@ section .text
     global scheduler_co_func
 
 %macro inc_round_modulo 2
+    nop
+    %%inc_round_modulo:
     ; increment value in %2 modulo:
     ; (if ++value == %2) value = 0
     inc %1
@@ -287,14 +289,6 @@ scheduler_co_func:
     mov dword [%$drone_id], 0
 
     .scheduler_loop:
-        pushad
-        mov edx, 3
-        lea ecx, [%$tmp_buf]
-        mov ebx, 0
-        mov eax, 3
-        int 0x80
-        popad
-
         dbg_print_line "----------"
         dbg_print_line "scheduler"
         dbg_print_line "i: %d", [%$i]
@@ -387,6 +381,7 @@ scheduler_co_func:
         ; init vars for the next round
         inc dword [%$round]
         inc_round_modulo dword [%$rounds_since_last_elim_round], dword [R]
+        .loop_increment.check_if_round_ended.reset_drone_id:
         mov dword [%$drone_id], 0
 
         dbg_print_line "Next game round: %d", [%$round]
@@ -404,7 +399,7 @@ scheduler_co_func:
     .winner:
         mov eax, [%$winner_id]
         inc eax
-        printf_line "The Winner is drone: ", eax
+        printf_line "The Winner is drone: %d", eax
     
     .end_scheduler:
     jmp end_co
@@ -417,14 +412,35 @@ find_drone_id_with_lowest_score: ; find_drone_with_lowest_score(): int
     %define %$i ebp-12
 
     ; i = 0
-    mov dword [%$i], 1
-    ; drone_id_with_min_score = 1
-    mov dword [%$drone_id_with_min_score], 1
-    ; min_score = DronesArr[0]->score
+    mov dword [%$i], 0
+    mov dword [%$drone_id_with_min_score], -1
+
+    .find_first_active_drone_loop:
+    ; if (i == N) break;
+    mov eax, dword [N]
+    cmp dword [%$i], eax
+    je .find_first_active_drone_loop_end
+
+    ; eax = DronesArr[i] (drone)
+    ; if (!drone->is_active) continue;
     mov eax, dword [DronesArr]
-    mov eax, [eax]
-    mov eax, [drone_score(eax)]
-    mov dword [%$min_score], eax
+    mov ebx, dword [%$i]
+    mov eax, dword [eax+4*ebx]
+    cmp dword [drone_is_active(eax)], FALSE
+    je .find_first_active_drone_loop_continue
+
+    ; drone_id_with_min_score = i
+    mem_mov dword [%$drone_id_with_min_score], dword [%$i], ebx
+    ; min_score = drone->score
+    mem_mov dword [%$min_score], [drone_score(eax)], ebx
+    ; break
+    jmp .find_first_active_drone_loop_end
+
+    .find_first_active_drone_loop_continue:
+    inc dword [%$i]
+    jmp .find_first_active_drone_loop
+    .find_first_active_drone_loop_end:
+    nop
 
     .drone_arr_loop:
     ; if (i == N) break;
@@ -439,16 +455,17 @@ find_drone_id_with_lowest_score: ; find_drone_with_lowest_score(): int
     cmp dword [drone_is_active(eax)], FALSE
     je .drone_arr_loop_continue
     
+    .check_min_score:
     ; if (min_score < DronesArr[i]->score) set new min vars
     mov ebx, dword [drone_score(eax)]
     cmp dword [%$min_score], ebx
     jge .drone_arr_loop_continue
 
     .new_min:
-    ; drone_id_with_min_score = i
-    mem_mov dword [%$drone_id_with_min_score], dword [%$i], ecx
     ; min_score = DronesArr[i]->score
     mov dword [%$min_score], ebx
+    ; drone_id_with_min_score = i
+    mem_mov dword [%$drone_id_with_min_score], dword [%$i], ebx
 
     .drone_arr_loop_continue:
     inc dword [%$i]

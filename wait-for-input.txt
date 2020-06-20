@@ -1,0 +1,16 @@
+cmp dword [DebugMode], FALSE
+je .dont_wait_for_input
+pushad
+mov edx, 3
+lea ecx, [%$tmp_buf]
+mov ebx, 0
+mov eax, 3
+int 0x80
+cmp byte [%$tmp_buf], 'q'
+jne .no_exit
+mov ebx, 0
+mov eax, 1
+int 0x80
+.no_exit:
+popad
+.dont_wait_for_input:
