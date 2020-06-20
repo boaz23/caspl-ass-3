@@ -237,15 +237,16 @@ printer_co_func:
     sub esp, 4
     %define $index ebp-4
 
+.start_print:
     ; print target location x,y
     printf_line "%.2f,%.2f", [TargetPosition], [TargetPosition+4], [TargetPosition+8], [TargetPosition+12]
 
     mov dword [$index], 0
     ;while(ecx < N)
-print_drones_data_start:
+.print_drones_data_start:
     mov ecx, dword [$index]
     cmp ecx, dword [N]
-    jge print_drones_data_start_end
+    jge .print_drones_data_start_end
 
     ; eax = drone id
     mov eax, ecx
@@ -261,15 +262,15 @@ print_drones_data_start:
     printf_inline "%d", [drone_score(ebx)]
     printf_line ""
 
-check_loop_a:
+.check_loop_a:
 
     inc dword [$index]
-    jmp print_drones_data_start
-print_drones_data_start_end:
+    jmp .print_drones_data_start
+.print_drones_data_start_end:
     mov ebx, [CoId_Scheduler]
     call resume
 
-    jmp printer_co_func
+    jmp .start_print
 
     add esp, 4
     pop ebp
