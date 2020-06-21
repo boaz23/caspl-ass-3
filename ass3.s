@@ -231,6 +231,7 @@ section .rodata
     global BoardHeight
     global DroneMaxSpeed
     global MaxAngle
+    global one_eighty
 
     global FloatPrintFormat
     global FloatPrintFormat_NewLine
@@ -242,6 +243,7 @@ section .rodata
     BoardHeight: dd BOARD_HEIGHT
     DroneMaxSpeed: dd DRONE_MAX_SPEED
     MaxAngle: dd MAX_ANGLE
+    one_eighty:	dd 	180.0
 
     ; formats
     FloatPrintFormat: db "%.2f", NULL_TERMINATOR

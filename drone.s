@@ -204,15 +204,13 @@ STK_UNIT EQU 4
 %define drone_score(d) d+32
 %define drone_is_active(d) d+36
 
-section .data
-one_eighty:	dd 	180.0
-
 section .text
 global drone_co_func
 
 extern DronesArr
 extern DroneMaxSpeed
 extern MaxAngle
+extern one_eighty
 
 extern BoardHeight
 extern BoardWidth
