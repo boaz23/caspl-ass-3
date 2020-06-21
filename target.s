@@ -280,7 +280,6 @@ mayDestroy:
 
     .exit:
     fstp st0
-    dbg_print_line "may destroy: %d", [%$may_destory]
     func_exit [%$may_destory]
 
 createTarget:

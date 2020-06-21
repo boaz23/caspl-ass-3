@@ -357,17 +357,17 @@ update_drone_game_data:
 	fdivp	                ; and divide by 180.0
 
     mov ebx, dword [$drone_ptr_update]	
-    fsincos                 ; Compute vectors in y and x 
+    fsincos                 ; Compute vectors in y and x
+	fld	qword [drone_speed(ebx)]
+	fmulp                  ; Multiply by distance to get dx
+	fld	qword [drone_x(ebx)]
+	faddp
+    fstp qword [drone_x(ebx)] 
     fld	qword [drone_speed(ebx)]
 	fmulp                   ; Multiply by distance to get dy
     fld	qword [drone_y(ebx)]
 	faddp
 	fstp qword [drone_y(ebx)]
-	fld	qword [drone_speed(ebx)]
-	fmulp                  ; Multiply by distance to get dx
-	fld	qword [drone_x(ebx)]
-	faddp   	
-    fstp qword [drone_x(ebx)]
 
     ; compute the new location of drone_y
     compute_new_location_one_axis drone_y(ebx), BoardHeight
@@ -409,7 +409,6 @@ drone_co_func:
     mov ebx, dword [DronesArr]
     mov ebx, [ebx + 4*eax]
     mov dword [$drone_ptr], ebx
-    dbg_print_line "%x", dword ebx
 
     ;push dword [$drone_ptr]
     ;call update_drone_game_data
