@@ -215,6 +215,7 @@ extern DebugMode
 
 extern resume
 extern CoId_Scheduler
+extern CurrentDroneId
 
 extern TargetPosition
 
@@ -230,21 +231,14 @@ global target_co_func
 global mayDestroy
 
 target_co_func:
-    push 1
-    push dword f_target
-    call printf
-    add esp, 4
 
-    mov ebx, [CoId_Scheduler]
-    call resume
+    .loop:
+        void_call createTarget
+        dbg_print_line "Targer resuming drone %d", [CurrentDroneId]
+        co_resume dword [CurrentDroneId]
 
-    push 2
-    push dword f_target
-    call printf
-    add esp, 4
-
-    mov ebx, [CoId_Scheduler]
-    call resume
+        jmp .loop
+    .loop_end:
 
 mayDestroy:
     func_entry 4
@@ -252,32 +246,20 @@ mayDestroy:
     %define %$may_destory ebp-4
 
     fld qword [TargetPosition]
-    dbg_print_double_st
     fld qword [Position]
-    dbg_print_double_st
     fsubp ; dx = Position.x - TargetPosition.x
-    dbg_print_double_st
     fld st0
-    dbg_print_double_st
     fmulp ; st0 = st0^2
-    dbg_print_double_st
 
     dbg_print_line ""
     fld qword [TargetPosition+8]
-    dbg_print_double_st
     fld qword [Position+8]
-    dbg_print_double_st
     fsubp ; dy = Position.y - TargetPosition.y
-    dbg_print_double_st
     fld st0
-    dbg_print_double_st
     fmulp ; st0 = st0^2
-    dbg_print_double_st
 
     faddp ; st0 = dx^2 + dy^2
-    dbg_print_double_st
     fsqrt ; st0 = sqrt(st0)
-    dbg_print_double_st
 
     ; d >= sqrt((x - tx)^2 + (y - ty)^2)
     ; !(d < sqrt((x - tx)^2 + (y - ty)^2))
@@ -287,7 +269,6 @@ mayDestroy:
     ; st0 = d
     ; if (d <= sqrt((x - tx)^2 + (y - ty)^2))
     fld qword [d]
-    dbg_print_double_st
     fcomip
     jnc .may_destory
     .may_not_destory:
@@ -309,15 +290,15 @@ createTarget:
     pusha
 
     ;generate x position
+    push dword [BoardWidth]
     push 0
-    push BoardWidth
     call gen_rand_num_in_range
     add esp, 8
     mem_double_mov TargetPosition, RandomNumber
 
     ;generate y position
+    push dword [BoardHeight]
     push 0
-    push BoardHeight
     call gen_rand_num_in_range
     add esp, 8
     mem_double_mov TargetPosition+8, RandomNumber

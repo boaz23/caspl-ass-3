@@ -259,6 +259,7 @@ printer_co_func:
     printf_inline "%.2f,", [drone_x(ebx)], [drone_x(ebx) + 4]
     printf_inline "%.2f,", [drone_y(ebx)], [drone_y(ebx) + 4]
     printf_inline "%.2f,", [drone_angle(ebx)], [drone_angle(ebx) + 4]
+    printf_inline "%.2f,", [drone_speed(ebx)], [drone_speed(ebx) + 4]
     printf_inline "%d", [drone_score(ebx)]
     printf_line ""
 

@@ -335,15 +335,15 @@ update_drone_game_data:
     
 
     ;generate angle
-    push HEADING_ANGLE_LOWER
     push HEADING_ANGLE_UPPER
+    push HEADING_ANGLE_LOWER
     call gen_rand_num_in_range
     fld qword [RandomNumber]
     add esp, 8
 
     ;generate accelration
-    push SPEEND_CHANGE_LOWER
     push SPEEND_CHANGE_UPPER
+    push SPEEND_CHANGE_LOWER
     call gen_rand_num_in_range
     fld qword [RandomNumber]
     add esp, 8
@@ -424,8 +424,8 @@ drone_co_func:
 
     .check_destroy_target:
         mov eax, dword [$drone_ptr]
-        mem_double_mov Position, drone_x(eax)
-        mem_double_mov Position+8, drone_y(eax)
+        mem_double_mov Position, drone_x(eax), ebx
+        mem_double_mov Position+8, drone_y(eax), ebx
         func_call eax, mayDestroy
         cmp eax, FALSE
         je .no_destroy
