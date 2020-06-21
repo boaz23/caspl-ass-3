@@ -224,6 +224,7 @@ extern resume
 extern CoId_Scheduler
 extern CoId_Target
 extern CurrentDroneId
+extern Position
 
 extern mayDestroy
 
@@ -262,7 +263,7 @@ sizeof_drone EQU 40
 
     ;set the current speed s = s + accelatertion
     fld	qword [%1]
-    faddp 
+    faddp
     fstp qword [%1]
     ;check bounds
 %%check_greater_than_top:
@@ -422,11 +423,17 @@ drone_co_func:
         add esp, 4
 
     .check_destroy_target:
+        mov eax, dword [$drone_ptr]
+        mem_double_mov Position, drone_x(eax)
+        mem_double_mov Position+8, drone_y(eax)
         func_call eax, mayDestroy
         cmp eax, FALSE
         je .no_destroy
         .destroy_target:
-            ;TODO destory the targer
+            ; drone->score++
+            mov eax, dword [$drone_ptr]
+            inc dword [drone_score(eax)]
+
             mov ebx, [CoId_Target]
             call resume
         .no_destroy:

@@ -278,6 +278,7 @@ section .data
     global LSFR
     global RandomNumber
     global TargetPosition
+    global Position
     global DronesArr
     global CurrentDroneId
 
@@ -290,6 +291,7 @@ section .data
     ; the assignment page says to use globals and that all globals should
     ; sit in this file
     TargetPosition: dq 0, 0 ; (double x, double y)
+    Position: dq 0, 0
     DronesArr: dd NULL
     CurrentDroneId: dd -1
 
