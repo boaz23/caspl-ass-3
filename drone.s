@@ -223,6 +223,7 @@ extern RandomNumber
 extern resume
 extern CoId_Scheduler
 extern CoId_Target
+extern CurrentDroneId
 
 extern mayDestroy
 
@@ -403,29 +404,35 @@ drone_co_func:
     %define $drone_ptr ebp-4
 
     ;get the pointer to the drone struct
-    mov eax, [CURR_ID]
+    mov eax, [CurrentDroneId]
     mov ebx, dword [DronesArr]
     mov ebx, [ebx + 4*eax]
     mov dword [$drone_ptr], ebx
     dbg_print_line "%x", dword ebx
 
-    push dword [$drone_ptr]
-    call update_drone_game_data
-    add esp, 4
+    ;push dword [$drone_ptr]
+    ;call update_drone_game_data
+    ;add esp, 4
 
 .drone_loop_start:
-    ;TODO check this function call args
-    void_call mayDestroy
-    cmp eax, 0
-    jz .update_drone_data
-        ;TODO destory the targer
-        mov ebx, [CoId_Target]
-        call resume
-.update_drone_data:
-    push dword [$drone_ptr]
-    call update_drone_game_data
-    add esp, 4
+    nop
+    .drone_loop.update_drone_data:
+        push dword [$drone_ptr]
+        call update_drone_game_data
+        add esp, 4
 
+    .check_destroy_target:
+        func_call eax, mayDestroy
+        cmp eax, FALSE
+        je .no_destroy
+        .destroy_target:
+            ;TODO destory the targer
+            mov ebx, [CoId_Target]
+            call resume
+        .no_destroy:
+            nop
+
+    .resume_scheduler:
     mov ebx, [CoId_Scheduler]
     call resume
 
