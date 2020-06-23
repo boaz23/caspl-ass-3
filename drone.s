@@ -257,7 +257,7 @@ sizeof_drone EQU 40
 
 ; drone macros
 
-%macro drone_add 2 ;ptr_to_data, upper_limit
+%macro drone_add_speed 2 ;ptr_to_data, upper_limit
 
     ;set the current speed s = s + accelatertion
     fld	qword [%1]
@@ -284,6 +284,41 @@ sizeof_drone EQU 40
     jc %%in_bounds
     fldz
     fstp qword [%1]
+%%in_bounds:
+
+%endmacro
+
+%macro drone_add_angle 2 ;ptr_to_data, upper_limit
+
+    ;set the current speed a = a + new angle
+    fld	qword [%1]
+    faddp
+    fstp qword [%1]
+    ;check bounds
+%%check_greater_than_top:
+    fild dword [%2]
+    fld	qword [%1]
+    ; if(DroneMaxAngle < drone_angle)
+    fcomip st1
+    fstp st0
+    jc %%cont_smaller_than_top
+    ;set drone angle = agnle - 360
+    fld	qword [%1]      ; st1
+    fild dword [%2]     ; st0
+    fsubp               ; st1 = st1 - st0 = angle - 360
+    fstp qword [%1]     ; angle = st1
+    jmp %%in_bounds
+%%cont_smaller_than_top:
+    fld	qword [%1]
+    fldz
+    ; if(drone_speed < 0)
+    fcomip st1
+    fstp st0
+    jc %%in_bounds
+    fld	qword [%1]      ; st1
+    fild dword [%2]     ; st0
+    faddp               ; st1 = st1 + st0 = angle + 360
+    fstp qword [%1]     ; angle = st1
 %%in_bounds:
 
 %endmacro
@@ -373,8 +408,8 @@ update_drone_game_data:
     ; compute the new location of drone_x
     compute_new_location_one_axis drone_x(ebx), BoardWidth
 
-    drone_add drone_speed(ebx), DroneMaxSpeed
-    drone_add drone_angle(ebx), MaxAngle
+    drone_add_speed drone_speed(ebx), DroneMaxSpeed
+    drone_add_angle drone_angle(ebx), MaxAngle
 
        dbg_print_line "Drone data end of update"
        dbg_print_line "Drone id: %d", [CURR_ID]
