@@ -323,7 +323,7 @@ section .data
     ; co-routines: static co-routines initialization
     CO_ARGS_COUNT equ 1
     %define co_routine_bp_offset(sp) sp+STKSZ-((CO_ARGS_COUNT + 2) * STK_UNIT)
-    %define define_co_routine(func, sp) dd func, 0, co_routine_bp_offset(sp), co_routine_bp_offset(sp), sp
+    %define define_co_routine(func, sp) dd func, 0, co_routine_bp_offset(sp), sp
     
     CO_SCHEDULER: define_co_routine(scheduler_co_func, STK_SCHEDULER)
     CO_PRINTER:   define_co_routine(printer_co_func,   STK_PRINTER)
